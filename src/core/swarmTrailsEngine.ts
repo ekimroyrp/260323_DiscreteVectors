@@ -94,6 +94,10 @@ export class SwarmTrailsEngine {
     return this.geometry;
   }
 
+  getEmitterOrigins(): Float32Array {
+    return Float32Array.from(this.origins);
+  }
+
   getActiveVertexCount(): number {
     return this.activeVertexCount;
   }

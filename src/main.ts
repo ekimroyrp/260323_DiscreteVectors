@@ -1,12 +1,16 @@
 import './style.css';
 import {
   ACESFilmicToneMapping,
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   Color,
+  InstancedMesh,
   LineBasicMaterial,
   LineSegments,
+  Matrix4,
   MOUSE,
+  MeshBasicMaterial,
   PerspectiveCamera,
   SRGBColorSpace,
   Scene,
@@ -20,6 +24,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+import { buildActiveLineGeometry, buildObjWithVertexColors } from './core/exportUtils';
 import { MaterialController } from './core/materialController';
 import { SwarmTrailsEngine, type SwarmSnapshot } from './core/swarmTrailsEngine';
 import type {
@@ -95,6 +100,7 @@ type TimelineEntry = { step: number; snapshot: SwarmSnapshot };
 
 const MAX_TIMELINE_SNAPSHOTS = 120;
 const TIMELINE_SNAPSHOT_INTERVAL = 0.12;
+const MAX_TIMELINE_BYTES = 96 * 1024 * 1024;
 const NOISE_SEED = 351107;
 
 function revealUiWhenStyled(maxWaitMs = 1500): void {
@@ -284,6 +290,25 @@ engine.setGradientBlur(materialSettings.gradientBlur);
 const lines = new LineSegments(engine.getGeometry(), materialController.material);
 scene.add(lines);
 
+const MAX_EMITTER_MARKERS = 18 * 18 * 18;
+const emitterMarkerGeometry = new BoxGeometry(0.03, 0.03, 0.03);
+const emitterMarkerMaterial = new MeshBasicMaterial({
+  color: 0xf6fbff,
+  transparent: true,
+  opacity: 0.9,
+  depthWrite: false,
+  depthTest: false,
+});
+const emitterMarkers = new InstancedMesh(
+  emitterMarkerGeometry,
+  emitterMarkerMaterial,
+  MAX_EMITTER_MARKERS,
+);
+emitterMarkers.count = 0;
+emitterMarkers.renderOrder = 2;
+scene.add(emitterMarkers);
+const markerMatrix = new Matrix4();
+
 const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
@@ -303,6 +328,7 @@ let currentTimelineStep = 0;
 let timelineSliderSyncing = false;
 let timelineRangeBound = false;
 let snapshotAccumulator = 0;
+let maxTimelineEntries = MAX_TIMELINE_SNAPSHOTS;
 let draggingPanel = false;
 const dragOffset = { x: 0, y: 0 };
 
@@ -661,6 +687,23 @@ function setStartButtonState(running: boolean): void {
   ui.start.classList.toggle('is-start-state', !running);
 }
 
+function syncEmitterMarkerVisibility(): void {
+  emitterMarkers.visible = !appState.running;
+}
+
+function rebuildEmitterMarkers(): void {
+  const origins = engine.getEmitterOrigins();
+  const count = Math.min(Math.floor(origins.length / 3), MAX_EMITTER_MARKERS);
+  for (let i = 0; i < count; i += 1) {
+    const read = i * 3;
+    markerMatrix.makeTranslation(origins[read], origins[read + 1], origins[read + 2]);
+    emitterMarkers.setMatrixAt(i, markerMatrix);
+  }
+  emitterMarkers.count = count;
+  emitterMarkers.instanceMatrix.needsUpdate = true;
+  syncEmitterMarkerVisibility();
+}
+
 function syncEngineGeometryReference(): void {
   lines.geometry = engine.getGeometry();
 }
@@ -686,12 +729,35 @@ function syncTimelineSliderState(): void {
   updateRangeProgress(ui.timeline);
 }
 
+function estimateSnapshotBytes(snapshot: SwarmSnapshot): number {
+  return (
+    snapshot.heads.byteLength +
+    snapshot.velocities.byteLength +
+    snapshot.travel.byteLength +
+    snapshot.trailPoints.byteLength +
+    snapshot.headIndices.byteLength +
+    snapshot.filledLengths.byteLength
+  );
+}
+
+function updateTimelineCapacity(snapshot: SwarmSnapshot): void {
+  const bytes = estimateSnapshotBytes(snapshot);
+  if (bytes <= 0) {
+    maxTimelineEntries = MAX_TIMELINE_SNAPSHOTS;
+    return;
+  }
+  const capped = Math.floor(MAX_TIMELINE_BYTES / bytes);
+  maxTimelineEntries = Math.max(2, Math.min(MAX_TIMELINE_SNAPSHOTS, capped));
+}
+
 function resetTimelineToCurrentState(): void {
   timelineEntries.length = 0;
   currentTimelineStep = 0;
+  const snapshot = engine.exportSnapshot();
+  updateTimelineCapacity(snapshot);
   timelineEntries.push({
     step: currentTimelineStep,
-    snapshot: engine.exportSnapshot(),
+    snapshot,
   });
   snapshotAccumulator = 0;
   syncTimelineSliderState();
@@ -714,14 +780,16 @@ function trimTimelineFutureFromCurrentStep(): void {
 function appendTimelineStepFromCurrentState(): void {
   trimTimelineFutureFromCurrentStep();
 
+  const snapshot = engine.exportSnapshot();
+  updateTimelineCapacity(snapshot);
   const nextStep = currentTimelineStep + 1;
   timelineEntries.push({
     step: nextStep,
-    snapshot: engine.exportSnapshot(),
+    snapshot,
   });
   currentTimelineStep = nextStep;
 
-  while (timelineEntries.length > MAX_TIMELINE_SNAPSHOTS) {
+  while (timelineEntries.length > maxTimelineEntries) {
     timelineEntries.shift();
   }
 
@@ -749,12 +817,14 @@ function seekTimelineStep(step: number): void {
 function startSimulation(): void {
   appState.running = true;
   setStartButtonState(true);
+  syncEmitterMarkerVisibility();
   syncTimelineSliderState();
 }
 
 function stopSimulation(): void {
   appState.running = false;
   setStartButtonState(false);
+  syncEmitterMarkerVisibility();
   syncTimelineSliderState();
 }
 
@@ -771,6 +841,7 @@ function applyEmitterAndParticleSettings(forceReset = false): void {
   engine.setEmitterSettings(emitterSettings);
   engine.setParticleSettings(particleSettings);
   syncEngineGeometryReference();
+  rebuildEmitterMarkers();
   if (forceReset || !appState.running) {
     resetSimulation();
   }
@@ -826,27 +897,6 @@ function buildExportVertexColors(geometry: BufferGeometry, vertexCount: number):
   return colors;
 }
 
-function buildObjWithVertexColors(geometry: BufferGeometry, vertexCount: number, colors: Float32Array): string {
-  const position = geometry.getAttribute('position') as BufferAttribute;
-  const format = (value: number): string => value.toFixed(6);
-  const linesOut: string[] = [];
-  linesOut.push('# Swarm trails OBJ export');
-  linesOut.push('# Vertex colors encoded as: v x y z r g b');
-
-  for (let i = 0; i < vertexCount; i += 1) {
-    const colorIndex = i * 3;
-    linesOut.push(
-      `v ${format(position.getX(i))} ${format(position.getY(i))} ${format(position.getZ(i))} ${format(colors[colorIndex])} ${format(colors[colorIndex + 1])} ${format(colors[colorIndex + 2])}`,
-    );
-  }
-
-  for (let i = 0; i < vertexCount; i += 2) {
-    linesOut.push(`l ${i + 1} ${i + 2}`);
-  }
-
-  return `${linesOut.join('\n')}\n`;
-}
-
 function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -889,21 +939,8 @@ function exportCurrentTrailsAsGlb(filename: string): void {
     return;
   }
 
-  const sourcePosition = sourceGeometry.getAttribute('position') as BufferAttribute;
-  const exportGeometry = new BufferGeometry();
-  const positions = new Float32Array(activeVertexCount * 3);
   const colors = buildExportVertexColors(sourceGeometry, activeVertexCount);
-
-  for (let i = 0; i < activeVertexCount; i += 1) {
-    const write = i * 3;
-    positions[write] = sourcePosition.getX(i);
-    positions[write + 1] = sourcePosition.getY(i);
-    positions[write + 2] = sourcePosition.getZ(i);
-  }
-
-  exportGeometry.setAttribute('position', new BufferAttribute(positions, 3));
-  exportGeometry.setAttribute('color', new BufferAttribute(colors, 3));
-  exportGeometry.setDrawRange(0, activeVertexCount);
+  const exportGeometry = buildActiveLineGeometry(sourceGeometry, activeVertexCount, colors);
 
   const exportMaterial = new LineBasicMaterial({ vertexColors: true });
   const exportLines = new LineSegments(exportGeometry, exportMaterial);
@@ -1123,6 +1160,7 @@ window.addEventListener('pointercancel', () => {
 window.addEventListener('resize', handleResize);
 
 setStartButtonState(false);
+rebuildEmitterMarkers();
 resetTimelineToCurrentState();
 
 let lastTime = performance.now();

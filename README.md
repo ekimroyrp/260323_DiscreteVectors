@@ -8,6 +8,7 @@
 - Particle trail controls (`Trail Length`, `Generation Distance`).
 - Growth controls for noise behavior (`Noise Scale`, `Noise Speed`, `Noise Strength`, `Vorticity`, `Attraction`, `Damping`).
 - Material controls for gradient and lighting look (`Gradient Type`, colors, contrast, bias, blur, fresnel, specular, bloom).
+- Emitter-origin square markers visible while simulation is paused/stopped for start-point layout inspection.
 - Simulation controls (`Start/Pause`, `Reset`, `Simulation Timeline`, `Simulation Rate`).
 - Export tools (`Export OBJ`, `Export GLB`, `Export Screenshot`).
 
@@ -30,7 +31,7 @@
   - `RMB` = Orbit
 - Simulation:
   - `Start` / `Pause` toggles stepping
-  - `Reset` rebuilds the swarm from current emitter/particle settings
+  - `Reset` rebuilds the swarm from current emitter/particle settings and shows emitter start markers
   - `Simulation Timeline` scrubs through recorded snapshots while paused
 - Exports:
   - `Export OBJ` saves line trails with vertex colors

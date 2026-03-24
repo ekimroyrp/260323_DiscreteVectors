@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BufferAttribute } from 'three';
+import { buildActiveLineGeometry, buildObjWithVertexColors } from '../src/core/exportUtils';
 import { SwarmTrailsEngine } from '../src/core/swarmTrailsEngine';
 import type { EmitterSettings, GrowthSettings, ParticleSettings } from '../src/types';
 
@@ -138,6 +139,30 @@ describe('SwarmTrailsEngine determinism and snapshots', () => {
     }
     expect(maxRestoreDelta).toBeLessThan(1e-9);
   });
+
+  it('supports scrub/resume continuation from a timeline snapshot', () => {
+    const engine = new SwarmTrailsEngine(baseEmitter, baseParticles, baseGrowth, 451);
+    const timeline = [engine.exportSnapshot()];
+
+    for (let i = 0; i < 30; i += 1) {
+      engine.step(1 / 60, 1);
+      timeline.push(engine.exportSnapshot());
+    }
+
+    const scrubStep = 12;
+    const finalExpected = timeline[timeline.length - 1].heads;
+    engine.importSnapshot(timeline[scrubStep]);
+    for (let i = scrubStep; i < 30; i += 1) {
+      engine.step(1 / 60, 1);
+    }
+    const resumedFinal = engine.exportSnapshot().heads;
+
+    let maxDelta = 0;
+    for (let i = 0; i < finalExpected.length; i += 1) {
+      maxDelta = Math.max(maxDelta, Math.abs(finalExpected[i] - resumedFinal[i]));
+    }
+    expect(maxDelta).toBeLessThan(1e-9);
+  });
 });
 
 describe('SwarmTrailsEngine render attributes', () => {
@@ -167,5 +192,47 @@ describe('SwarmTrailsEngine render attributes', () => {
     expect(cMax).toBeLessThanOrEqual(1);
     expect(dMin).toBeGreaterThanOrEqual(0);
     expect(dMax).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('Export utilities', () => {
+  it('builds OBJ line output with per-vertex colors', () => {
+    const engine = new SwarmTrailsEngine(baseEmitter, baseParticles, baseGrowth, 73);
+    for (let i = 0; i < 50; i += 1) {
+      engine.step(1 / 60, 1);
+    }
+
+    const geometry = engine.getGeometry();
+    const active = engine.getActiveVertexCount();
+    expect(active).toBeGreaterThan(2);
+
+    const colors = new Float32Array(active * 3);
+    colors.fill(0.5);
+    const obj = buildObjWithVertexColors(geometry, active, colors);
+
+    const vertexLines = obj.match(/^v /gm)?.length ?? 0;
+    const lineLines = obj.match(/^l /gm)?.length ?? 0;
+    expect(vertexLines).toBe(active);
+    expect(lineLines).toBe(Math.floor(active / 2));
+  });
+
+  it('builds active line geometry sized to draw range', () => {
+    const engine = new SwarmTrailsEngine(baseEmitter, baseParticles, baseGrowth, 74);
+    for (let i = 0; i < 50; i += 1) {
+      engine.step(1 / 60, 1);
+    }
+
+    const source = engine.getGeometry();
+    const active = engine.getActiveVertexCount();
+    const colors = new Float32Array(active * 3);
+    colors.fill(0.25);
+
+    const clone = buildActiveLineGeometry(source, active, colors);
+    const clonePos = clone.getAttribute('position') as BufferAttribute;
+    const cloneColor = clone.getAttribute('color') as BufferAttribute;
+    expect(clonePos.count).toBe(active);
+    expect(cloneColor.count).toBe(active);
+    expect(clone.drawRange.count).toBe(active);
+    clone.dispose();
   });
 });
