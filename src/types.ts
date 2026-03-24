@@ -17,6 +17,7 @@ export type ParticleSettings = {
   trailLength: number;
   generationDistance: number;
   trailThickness: number;
+  discreteResolution: number;
 };
 
 export type GrowthSettings = {

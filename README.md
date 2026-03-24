@@ -5,8 +5,9 @@
 ## Features
 - Curl-noise swarm simulation with convergence grouping in 3D.
 - Centered emitter cube controls (`Count X/Y/Z` and `Spacing X/Y/Z`).
-- Particle trail controls (`Trail Length`, `Generation Distance`, `Trail Thickness`).
+- Particle trail controls (`Trail Length`, `Generation Distance`, `Trail Thickness`, `Discrete Resolution`).
 - Mesh trail rendering with square-profile sweep and closed mesh ends.
+- Center discrete-space visualization: a wireframe subdivided box with center-to-vertex guide lines.
 - Growth controls for noise behavior (`Noise Scale`, `Noise Speed`, `Noise Strength`, `Vorticity`, `Attraction`, `Damping`).
 - Material controls for gradient and lighting look (`Gradient Type`, colors, contrast, bias, blur, fresnel, specular, bloom).
 - Emitter-origin square markers visible in reset/start state for start-point layout inspection.
@@ -34,6 +35,9 @@
   - `Start` / `Pause` toggles stepping
   - `Reset` rebuilds the swarm from current emitter/particle settings and shows emitter start markers
   - `Simulation Timeline` scrubs through recorded snapshots while paused
+- Particles:
+  - `Discrete Resolution` sets box subdivisions for the center wireframe box and center-to-vertex lines
+  - `Trail Thickness` controls swept square profile size for mesh trails
 - Exports:
   - `Export OBJ` saves mesh trails with vertex colors
   - `Export GLB` saves mesh trails with vertex colors

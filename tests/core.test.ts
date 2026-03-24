@@ -28,6 +28,7 @@ const baseParticles: ParticleSettings = {
   trailLength: 32,
   generationDistance: 0.02,
   trailThickness: 1,
+  discreteResolution: 6,
 };
 
 const baseGrowth: GrowthSettings = {
@@ -88,7 +89,7 @@ describe('SwarmTrailsEngine trail generation', () => {
   it('keeps fixed-length trails and approximately respects generation distance', () => {
     const engine = new SwarmTrailsEngine(
       { countX: 1, countY: 1, countZ: 1, spacingX: 0.2, spacingY: 0.2, spacingZ: 0.2 },
-      { trailLength: 20, generationDistance: 0.015, trailThickness: 1 },
+      { trailLength: 20, generationDistance: 0.015, trailThickness: 1, discreteResolution: 6 },
       { ...baseGrowth, attraction: 0.05 },
       77,
     );
@@ -286,6 +287,7 @@ describe('Trail mesh builder', () => {
       trailLength: 2,
       generationDistance: 0.05,
       trailThickness: 2,
+      discreteResolution: 6,
     };
     const material: MaterialSettings = {
       gradientType: 'curvature',

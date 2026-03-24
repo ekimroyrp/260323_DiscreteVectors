@@ -5,6 +5,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  EdgesGeometry,
   InstancedMesh,
   Matrix4,
   MOUSE,
@@ -18,6 +19,9 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -66,6 +70,8 @@ type UiRefs = {
   generationDistanceValue: HTMLSpanElement;
   trailThickness: HTMLInputElement;
   trailThicknessValue: HTMLSpanElement;
+  discreteResolution: HTMLInputElement;
+  discreteResolutionValue: HTMLSpanElement;
   noiseScale: HTMLInputElement;
   noiseScaleValue: HTMLSpanElement;
   noiseSpeed: HTMLInputElement;
@@ -178,6 +184,8 @@ const ui: UiRefs = {
   generationDistanceValue: requiredElement('generation-distance-value', isSpan),
   trailThickness: requiredElement('trail-thickness', isInput),
   trailThicknessValue: requiredElement('trail-thickness-value', isSpan),
+  discreteResolution: requiredElement('discrete-resolution', isInput),
+  discreteResolutionValue: requiredElement('discrete-resolution-value', isSpan),
   noiseScale: requiredElement('noise-scale', isInput),
   noiseScaleValue: requiredElement('noise-scale-value', isSpan),
   noiseSpeed: requiredElement('noise-speed', isInput),
@@ -234,6 +242,7 @@ const particleSettings: ParticleSettings = {
   trailLength: Number.parseInt(ui.trailLength.value, 10),
   generationDistance: Number.parseFloat(ui.generationDistance.value),
   trailThickness: Number.parseFloat(ui.trailThickness.value),
+  discreteResolution: Number.parseInt(ui.discreteResolution.value, 10),
 };
 
 const growthSettings: GrowthSettings = {
@@ -296,6 +305,38 @@ let trailMeshGeometry = new BufferGeometry();
 const trailMesh = new Mesh(trailMeshGeometry, materialController.material);
 trailMesh.frustumCulled = false;
 scene.add(trailMesh);
+
+const DISCRETE_BOX_SIZE = 1.5;
+let discreteBoxEdgeGeometry = new LineSegmentsGeometry();
+let discreteBoxCenterLineGeometry = new LineSegmentsGeometry();
+const discreteBoxEdgeMaterial = new LineMaterial({
+  color: 0x6e88a6,
+  transparent: true,
+  opacity: 0.78,
+  linewidth: 2.6,
+  dashed: false,
+});
+const discreteBoxCenterLineMaterial = new LineMaterial({
+  color: 0x8aa7c9,
+  transparent: true,
+  opacity: 0.58,
+  linewidth: 1.8,
+  dashed: false,
+});
+discreteBoxEdgeMaterial.depthWrite = false;
+discreteBoxCenterLineMaterial.depthWrite = false;
+discreteBoxEdgeMaterial.depthTest = false;
+discreteBoxCenterLineMaterial.depthTest = false;
+discreteBoxEdgeMaterial.resolution.set(window.innerWidth, window.innerHeight);
+discreteBoxCenterLineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+const discreteBoxEdges = new LineSegments2(discreteBoxEdgeGeometry, discreteBoxEdgeMaterial);
+const discreteBoxCenterLines = new LineSegments2(discreteBoxCenterLineGeometry, discreteBoxCenterLineMaterial);
+discreteBoxEdges.frustumCulled = false;
+discreteBoxCenterLines.frustumCulled = false;
+discreteBoxEdges.renderOrder = 1;
+discreteBoxCenterLines.renderOrder = 0;
+scene.add(discreteBoxCenterLines);
+scene.add(discreteBoxEdges);
 
 const MAX_EMITTER_MARKERS = 18 * 18 * 18;
 const emitterMarkerGeometry = new BoxGeometry(0.015, 0.015, 0.015);
@@ -709,6 +750,74 @@ function rebuildEmitterMarkers(): void {
   syncEmitterMarkerVisibility();
 }
 
+function buildDiscreteBoxGeometries(resolution: number): {
+  edgePositions: Float32Array;
+  centerLinePositions: Float32Array;
+} {
+  const subdivisions = Math.max(1, Math.round(resolution));
+  const boxGeometry = new BoxGeometry(
+    DISCRETE_BOX_SIZE,
+    DISCRETE_BOX_SIZE,
+    DISCRETE_BOX_SIZE,
+    subdivisions,
+    subdivisions,
+    subdivisions,
+  );
+  const edgesGeometry = new EdgesGeometry(boxGeometry);
+  const edgePositionsAttr = edgesGeometry.getAttribute('position') as BufferAttribute | undefined;
+  const edgePositions = edgePositionsAttr
+    ? Float32Array.from(edgePositionsAttr.array as ArrayLike<number>)
+    : new Float32Array(0);
+  const boxPositions = boxGeometry.getAttribute('position') as BufferAttribute | undefined;
+
+  const uniqueVertices: Array<[number, number, number]> = [];
+  if (boxPositions && boxPositions.count > 0) {
+    const seen = new Set<string>();
+    for (let i = 0; i < boxPositions.count; i += 1) {
+      const x = boxPositions.getX(i);
+      const y = boxPositions.getY(i);
+      const z = boxPositions.getZ(i);
+      const key = `${x.toFixed(6)}|${y.toFixed(6)}|${z.toFixed(6)}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      uniqueVertices.push([x, y, z]);
+    }
+  }
+
+  const linePositions = new Float32Array(uniqueVertices.length * 6);
+  let write = 0;
+  for (let i = 0; i < uniqueVertices.length; i += 1) {
+    const [x, y, z] = uniqueVertices[i];
+    linePositions[write] = 0;
+    linePositions[write + 1] = 0;
+    linePositions[write + 2] = 0;
+    linePositions[write + 3] = x;
+    linePositions[write + 4] = y;
+    linePositions[write + 5] = z;
+    write += 6;
+  }
+
+  edgesGeometry.dispose();
+  boxGeometry.dispose();
+  return { edgePositions, centerLinePositions: linePositions };
+}
+
+function rebuildDiscreteBoxVisualization(): void {
+  const { edgePositions, centerLinePositions } = buildDiscreteBoxGeometries(particleSettings.discreteResolution);
+  const nextEdgeGeometry = new LineSegmentsGeometry();
+  const nextCenterGeometry = new LineSegmentsGeometry();
+  nextEdgeGeometry.setPositions(edgePositions);
+  nextCenterGeometry.setPositions(centerLinePositions);
+  discreteBoxEdgeGeometry.dispose();
+  discreteBoxCenterLineGeometry.dispose();
+  discreteBoxEdgeGeometry = nextEdgeGeometry;
+  discreteBoxCenterLineGeometry = nextCenterGeometry;
+  discreteBoxEdges.geometry = discreteBoxEdgeGeometry;
+  discreteBoxCenterLines.geometry = discreteBoxCenterLineGeometry;
+}
+
 function syncEngineGeometryReference(): void {
   trailMeshDirty = true;
 }
@@ -889,6 +998,8 @@ function handleResize(): void {
   composer.setSize(width, height);
   bloomPass.setSize(width, height);
   fxaaPass.material.uniforms.resolution.value.set(1 / Math.max(width, 1), 1 / Math.max(height, 1));
+  discreteBoxEdgeMaterial.resolution.set(width, height);
+  discreteBoxCenterLineMaterial.resolution.set(width, height);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   clampPanelToViewport();
@@ -1030,6 +1141,15 @@ bindRange(ui.trailThickness, ui.trailThicknessValue, (value) => value.toFixed(2)
   particleSettings.trailThickness = value;
   trailMeshDirty = true;
 });
+bindRange(
+  ui.discreteResolution,
+  ui.discreteResolutionValue,
+  (value) => `${Math.round(value)}`,
+  (value) => {
+    particleSettings.discreteResolution = Math.round(value);
+    rebuildDiscreteBoxVisualization();
+  },
+);
 bindRange(ui.noiseScale, ui.noiseScaleValue, (value) => value.toFixed(2), (value) => {
   growthSettings.noiseScale = value;
   engine.setGrowthSettings(growthSettings);
