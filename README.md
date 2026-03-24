@@ -1,21 +1,19 @@
 # 260323_DiscreteVectors
 
-260323_DiscreteVectors is a Three.js interactive swarm-trails simulator that generates grouped particle paths from a centered 3D emitter grid using curl noise. Trails are rendered as swept square-profile mesh ribbons (polywire style) with vertex-color gradients, plus a draggable/collapsible control panel, timeline playback, material tuning, and OBJ/GLB/screenshot export.
+260323_DiscreteVectors is a Three.js interactive flow-field tool for building discrete curl-noise swarm trails from a centered 3D emitter grid. It supports two display modes: swept square-profile trail meshes (polywire style) and a blur-style particle display, with timeline playback, material tuning, and export tools for stills and geometry.
 
 ## Features
-- Curl-noise swarm simulation with convergence grouping in 3D.
-- Centered emitter cube controls (`Count X/Y/Z` and `Spacing X/Y/Z`).
-- Mesh controls (`Thickness Min`, `Thickness Max`, `Thickness Seed`).
-- Mesh trail rendering with square-profile sweep and closed mesh ends.
-- Discrete direction quantization (`Discrete Resolution`) for stepped vector-field motion.
-- Flow controls for motion behavior (`Discrete Resolution`, `Generation Distance`, `Momentum Damping`, `Attraction Force`, `Repulsion Force`, `Alignment Radius`, `Alignment Strength`, `Divergence Radius`, `Divergence Strength`, `Curl Frequency`, `Curl Strength`, `Curl Speed`, `Curl Vorticity`, `Octave Layers`, `Octave Lacunarity`, `Octave Gain`, `Warp Frequency`, `Warp Strength`, `Flow Seed`).
-- Material controls for gradient and lighting look (start/end colors, contrast, bias, blur, fresnel, specular, bloom).
-- Material `Particle Display` toggle to switch from mesh ribbons to blur-style particle visualization.
-- Trail gradients are mapped from each trail's own start point to end point.
-- Trails always begin at emitter points and keep growing until simulation is paused or reset.
-- Emitter-origin square markers visible in reset/start state for start-point layout inspection.
-- Simulation controls (`Start/Pause`, `Reset`, `Simulation Timeline`, `Simulation Rate`).
-- Export tools (`Export OBJ`, `Export GLB`, `Export Screenshot`).
+- Discrete curl-noise swarm simulation with 3D grouping behavior driven by attraction, repulsion, alignment, and divergence forces.
+- Centered emitter cube controls with independent `Spacing X/Y/Z` and `Count X/Y/Z`.
+- Discrete vector snapping pipeline (`Discrete Resolution`) that quantizes each generated trail step to the nearest cube-direction unit vector.
+- Continuous trail growth from emitters (no fixed trail length), with `Generation Distance` controlling sample spacing.
+- Mesh rendering mode with square-profile swept trails, closed ends, and per-trail randomized thickness (`Thickness Min`, `Thickness Max`, `Thickness Seed`).
+- Material section with gradient + shading controls (`Gradient Start/End`, `Gradient Contrast`, `Gradient Bias`, `Gradient Blur`, `Fresnel`, `Specular`, `Bloom`).
+- `Particle Display` toggle (Material) to switch from mesh ribbons to blur-style particles with additive blending.
+- Per-trail gradient mapping from each trail's own start to end, instead of scene-center distance mapping.
+- Reset/start emitter marker cubes for quickly inspecting emitter layout before running.
+- Timeline workflow with `Start/Pause`, `Reset`, snapshot scrubbing, and simulation-rate control.
+- Export tools for `OBJ`, `GLB`, and viewport `PNG` screenshots.
 
 ## Getting Started
 1. Clone this repo:
@@ -24,10 +22,12 @@
    `npm install`
 3. Run local dev server:
    `npm run dev`
-4. Build production bundle:
+4. Build production bundle (type-check + Vite build):
    `npm run build`
 5. Run tests:
    `npm test`
+6. Preview production build locally:
+   `npm run preview`
 
 ## Controls
 - Camera:
@@ -36,25 +36,37 @@
   - `RMB` = Orbit
 - Simulation:
   - `Start` / `Pause` toggles stepping
-  - `Reset` rebuilds the swarm from current emitter/particle settings and shows emitter start markers
+  - `Reset` rebuilds from current settings and shows emitter start markers
   - `Simulation Timeline` scrubs through recorded snapshots while paused
+- Emitter:
+  - `Spacing X/Y/Z` sets centered emitter-grid spacing
+  - `Count X/Y/Z` sets centered emitter-grid resolution
 - Flow:
-  - `Flow Seed` controls deterministic variation of the curl-noise field (same seed + settings reproduces the same motion)
-  - `Momentum Damping` controls velocity retention per step
-  - `Generation Distance` controls spacing between generated points along each trail
-  - `Discrete Resolution` controls the discrete direction set used for vector snapping
-  - `Attraction Force` and `Repulsion Force` pull/push particles relative to the swarm convergence target
-  - `Alignment Radius` and `Alignment Strength` add local neighbor-heading alignment force
-  - `Divergence Radius` and `Divergence Strength` apply opposite (anti-alignment) neighbor steering
-  - `Curl Frequency`, `Curl Strength`, `Curl Speed`, and `Curl Vorticity` control the curl field behavior
-  - `Octave Layers`, `Octave Lacunarity`, and `Octave Gain` control layered fBm detail in the flow field
-  - `Warp Frequency` and `Warp Strength` control domain warping before curl sampling
+  - `Discrete Resolution` sets the discrete direction basis used for vector snapping
+  - `Generation Distance` sets distance between emitted samples
+  - `Momentum Damping` controls retained velocity each step
+  - `Attraction Force` / `Repulsion Force` pull and push relative to the swarm convergence target
+  - `Alignment Radius` / `Alignment Strength` align to nearby heading direction
+  - `Divergence Radius` / `Divergence Strength` apply anti-alignment steering
+  - `Curl Frequency`, `Curl Strength`, `Curl Speed`, `Curl Vorticity` shape primary curl motion
+  - `Octave Layers`, `Octave Lacunarity`, `Octave Gain` shape multi-octave flow detail
+  - `Warp Frequency`, `Warp Strength` control domain warping before curl sampling
+  - `Flow Seed` controls deterministic field variation
 - Mesh:
   - `Thickness Min` / `Thickness Max` set per-trail random thickness range
   - `Thickness Seed` shuffles which trail gets which thickness value
 - Material:
-  - `Particle Display` toggles between mesh trail rendering and blur-style particle rendering
+  - `Gradient Start` / `Gradient End` set trail color ramp endpoints
+  - `Gradient Contrast` / `Gradient Bias` remap gradient response
+  - `Gradient Blur` smooths gradient transitions along trails
+  - `Fresnel`, `Specular`, `Bloom` tune final look
+  - `Particle Display` toggles mesh ribbons vs blur-style particles
 - Exports:
   - `Export OBJ` saves mesh trails with vertex colors
   - `Export GLB` saves mesh trails with vertex colors
   - `Export Screenshot` saves a PNG of the current viewport
+
+## Deployment
+- **Local production preview:** `npm install`, then `npm run build` followed by `npm run preview` to inspect the compiled bundle.
+- **Publish to GitHub Pages:** From a clean `main`, run `npm run build -- --base=./`. Checkout (or create) the `gh-pages` branch in a separate worktree/repo, copy everything inside `dist/` plus a `.nojekyll` marker to branch root, commit with a descriptive message, `git push origin gh-pages`, then switch back to `main`.
+- **Live demo:** https://ekimroyrp.github.io/260323_DiscreteVectors/
