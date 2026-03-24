@@ -1,9 +1,11 @@
 import './style.css';
 import {
+  AdditiveBlending,
   ACESFilmicToneMapping,
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  CanvasTexture,
   Color,
   EdgesGeometry,
   InstancedMesh,
@@ -11,6 +13,8 @@ import {
   MOUSE,
   Mesh,
   MeshBasicMaterial,
+  Points,
+  PointsMaterial,
   PerspectiveCamera,
   SRGBColorSpace,
   Scene,
@@ -29,6 +33,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { buildObjMeshWithVertexColors } from './core/exportUtils';
 import { MaterialController } from './core/materialController';
+import { buildParticleDisplayGeometry } from './core/particleDisplayBuilder';
 import { SwarmTrailsEngine, type SwarmSnapshot } from './core/swarmTrailsEngine';
 import { buildTrailMeshGeometry } from './core/trailMeshBuilder';
 import type {
@@ -107,6 +112,7 @@ type UiRefs = {
   alignmentRadiusValue: HTMLSpanElement;
   damping: HTMLInputElement;
   dampingValue: HTMLSpanElement;
+  particleDisplay: HTMLInputElement;
   gradientStart: HTMLInputElement;
   gradientEnd: HTMLInputElement;
   curvatureContrast: HTMLInputElement;
@@ -171,6 +177,33 @@ function isDiv(element: Element): element is HTMLDivElement {
 
 function isSpan(element: Element): element is HTMLSpanElement {
   return element instanceof HTMLSpanElement;
+}
+
+function createBlurSpriteTexture(): CanvasTexture | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const size = 64;
+  const spriteCanvas = document.createElement('canvas');
+  spriteCanvas.width = size;
+  spriteCanvas.height = size;
+  const context = spriteCanvas.getContext('2d');
+  if (!context) {
+    return null;
+  }
+
+  const radius = size * 0.5;
+  const gradient = context.createRadialGradient(radius, radius, 0, radius, radius, radius);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+  gradient.addColorStop(0.45, 'rgba(255, 255, 255, 0.35)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, size, size);
+
+  const texture = new CanvasTexture(spriteCanvas);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 const ui: UiRefs = {
@@ -240,6 +273,7 @@ const ui: UiRefs = {
   alignmentRadiusValue: requiredElement('alignment-radius-value', isSpan),
   damping: requiredElement('damping', isInput),
   dampingValue: requiredElement('damping-value', isSpan),
+  particleDisplay: requiredElement('particle-display', isInput),
   gradientStart: requiredElement('gradient-start-color', isInput),
   gradientEnd: requiredElement('gradient-end-color', isInput),
   curvatureContrast: requiredElement('curvature-contrast', isInput),
@@ -358,6 +392,30 @@ const trailMesh = new Mesh(trailMeshGeometry, materialController.material);
 trailMesh.frustumCulled = false;
 scene.add(trailMesh);
 
+let particleDisplayGeometry = new BufferGeometry();
+const particleSpriteTexture = createBlurSpriteTexture();
+const particleDisplayMaterialOptions: ConstructorParameters<typeof PointsMaterial>[0] = {
+  color: 0xffffff,
+  size: 0.06,
+  sizeAttenuation: true,
+  transparent: true,
+  opacity: 0.5,
+  depthWrite: false,
+  vertexColors: true,
+  blending: AdditiveBlending,
+};
+if (particleSpriteTexture) {
+  particleDisplayMaterialOptions.map = particleSpriteTexture;
+  particleDisplayMaterialOptions.alphaMap = particleSpriteTexture;
+  particleDisplayMaterialOptions.alphaTest = 0.02;
+}
+const particleDisplayMaterial = new PointsMaterial(particleDisplayMaterialOptions);
+const particleDisplayPoints = new Points(particleDisplayGeometry, particleDisplayMaterial);
+particleDisplayPoints.frustumCulled = false;
+particleDisplayPoints.renderOrder = 2;
+particleDisplayPoints.visible = false;
+scene.add(particleDisplayPoints);
+
 const DISCRETE_BOX_SIZE = 1.5;
 let discreteBoxEdgeGeometry = new LineSegmentsGeometry();
 let discreteBoxCenterLineGeometry = new LineSegmentsGeometry();
@@ -432,7 +490,9 @@ let timelineRangeBound = false;
 let snapshotAccumulator = 0;
 let maxTimelineEntries = MAX_TIMELINE_SNAPSHOTS;
 let trailMeshDirty = true;
+let particleDisplayDirty = true;
 let emitterMarkersStartVisible = true;
+let particleDisplayEnabled = ui.particleDisplay.checked;
 let draggingPanel = false;
 const dragOffset = { x: 0, y: 0 };
 
@@ -607,6 +667,11 @@ function syncEmitterMarkerVisibility(): void {
   emitterMarkers.visible = emitterMarkersStartVisible && !appState.running;
 }
 
+function syncDisplayModeVisibility(): void {
+  trailMesh.visible = !particleDisplayEnabled;
+  particleDisplayPoints.visible = particleDisplayEnabled;
+}
+
 function rebuildEmitterMarkers(): void {
   const origins = engine.getEmitterOrigins();
   const count = Math.min(Math.floor(origins.length / 3), MAX_EMITTER_MARKERS);
@@ -693,6 +758,7 @@ function rebuildDiscreteBoxVisualization(): void {
 
 function syncEngineGeometryReference(): void {
   trailMeshDirty = true;
+  particleDisplayDirty = true;
 }
 
 function updateTrailMeshGeometry(): void {
@@ -705,6 +771,18 @@ function updateTrailMeshGeometry(): void {
   trailMeshGeometry.dispose();
   trailMeshGeometry = nextGeometry;
   trailMesh.geometry = trailMeshGeometry;
+}
+
+function updateParticleDisplayGeometry(): void {
+  if (!particleDisplayDirty) {
+    return;
+  }
+  particleDisplayDirty = false;
+  const state = engine.getTrailStateView();
+  const nextGeometry = buildParticleDisplayGeometry(state, materialSettings);
+  particleDisplayGeometry.dispose();
+  particleDisplayGeometry = nextGeometry;
+  particleDisplayPoints.geometry = particleDisplayGeometry;
 }
 
 function syncTimelineSliderState(): void {
@@ -1112,16 +1190,19 @@ bindRange(ui.curvatureContrast, ui.curvatureContrastValue, (value) => value.toFi
   materialSettings.curvatureContrast = value;
   materialController.setMaterialSettings(materialSettings);
   trailMeshDirty = true;
+  particleDisplayDirty = true;
 });
 bindRange(ui.curvatureBias, ui.curvatureBiasValue, (value) => value.toFixed(2), (value) => {
   materialSettings.curvatureBias = value;
   materialController.setMaterialSettings(materialSettings);
   trailMeshDirty = true;
+  particleDisplayDirty = true;
 });
 bindRange(ui.gradientBlur, ui.gradientBlurValue, (value) => value.toFixed(2), (value) => {
   materialSettings.gradientBlur = value;
   engine.setGradientBlur(value);
   trailMeshDirty = true;
+  particleDisplayDirty = true;
 });
 bindRange(ui.fresnel, ui.fresnelValue, (value) => value.toFixed(2), (value) => {
   materialSettings.fresnel = value;
@@ -1140,11 +1221,18 @@ ui.gradientStart.addEventListener('input', () => {
   materialSettings.gradientStart = ui.gradientStart.value;
   materialController.setMaterialSettings(materialSettings);
   trailMeshDirty = true;
+  particleDisplayDirty = true;
 });
 ui.gradientEnd.addEventListener('input', () => {
   materialSettings.gradientEnd = ui.gradientEnd.value;
   materialController.setMaterialSettings(materialSettings);
   trailMeshDirty = true;
+  particleDisplayDirty = true;
+});
+ui.particleDisplay.addEventListener('change', () => {
+  particleDisplayEnabled = ui.particleDisplay.checked;
+  particleDisplayDirty = true;
+  syncDisplayModeVisibility();
 });
 ui.exportObj.addEventListener('click', () => {
   const geometry = getTrailMeshExportGeometry();
@@ -1222,6 +1310,7 @@ window.addEventListener('resize', handleResize);
 setStartButtonState(false);
 rebuildEmitterMarkers();
 resetTimelineToCurrentState();
+syncDisplayModeVisibility();
 
 let lastTime = performance.now();
 renderer.setAnimationLoop((now) => {
@@ -1241,7 +1330,11 @@ renderer.setAnimationLoop((now) => {
     }
   }
 
-  updateTrailMeshGeometry();
+  if (particleDisplayEnabled) {
+    updateParticleDisplayGeometry();
+  } else {
+    updateTrailMeshGeometry();
+  }
   composer.render();
 });
 

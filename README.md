@@ -10,6 +10,7 @@
 - Discrete direction quantization (`Discrete Resolution`) for stepped vector-field motion.
 - Flow controls for motion behavior (`Discrete Resolution`, `Generation Distance`, `Momentum Damping`, `Attraction Force`, `Repulsion Force`, `Alignment Radius`, `Alignment Strength`, `Divergence Radius`, `Divergence Strength`, `Curl Frequency`, `Curl Strength`, `Curl Speed`, `Curl Vorticity`, `Octave Layers`, `Octave Lacunarity`, `Octave Gain`, `Warp Frequency`, `Warp Strength`, `Flow Seed`).
 - Material controls for gradient and lighting look (start/end colors, contrast, bias, blur, fresnel, specular, bloom).
+- Material `Particle Display` toggle to switch from mesh ribbons to blur-style particle visualization.
 - Trail gradients are mapped from each trail's own start point to end point.
 - Trails always begin at emitter points and keep growing until simulation is paused or reset.
 - Emitter-origin square markers visible in reset/start state for start-point layout inspection.
@@ -51,6 +52,8 @@
 - Mesh:
   - `Thickness Min` / `Thickness Max` set per-trail random thickness range
   - `Thickness Seed` shuffles which trail gets which thickness value
+- Material:
+  - `Particle Display` toggles between mesh trail rendering and blur-style particle rendering
 - Exports:
   - `Export OBJ` saves mesh trails with vertex colors
   - `Export GLB` saves mesh trails with vertex colors
