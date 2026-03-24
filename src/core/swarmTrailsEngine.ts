@@ -9,19 +9,21 @@ export type SwarmSnapshot = {
   trailPoints: Float32Array;
   headIndices: Int32Array;
   filledLengths: Int32Array;
+  trailCapacity: number;
   time: number;
 };
 
 export type TrailStateView = {
   trailPoints: Float32Array;
-  headIndices: Int32Array;
   filledLengths: Int32Array;
-  trailLength: number;
+  trailCapacity: number;
   emitterCount: number;
 };
 
 const CENTER_BLEND = 0.6;
 const MIN_GENERATION_DISTANCE = 0.0001;
+const INITIAL_TRAIL_CAPACITY = 64;
+const MIN_TRAIL_CAPACITY = 8;
 
 function createSeededRandom(seed: number): { random: () => number } {
   let state = seed >>> 0;
@@ -40,6 +42,7 @@ export class SwarmTrailsEngine {
   private emitterSettings: EmitterSettings;
   private particleSettings: ParticleSettings;
   private growthSettings: GrowthSettings;
+  private seed: number;
   private geometry: BufferGeometry;
   private positionAttr: BufferAttribute;
   private curvatureAttr: BufferAttribute;
@@ -51,6 +54,7 @@ export class SwarmTrailsEngine {
   private trailPoints: Float32Array;
   private headIndices: Int32Array;
   private filledLengths: Int32Array;
+  private trailCapacity: number;
   private emitterCount: number;
   private activeVertexCount: number;
   private time: number;
@@ -58,6 +62,7 @@ export class SwarmTrailsEngine {
   private noiseA: SimplexNoise;
   private noiseB: SimplexNoise;
   private noiseC: SimplexNoise;
+  private discreteDirections: Float32Array;
   private curvatureScratch: Float32Array;
   private displacementScratch: Float32Array;
 
@@ -69,7 +74,8 @@ export class SwarmTrailsEngine {
   ) {
     this.emitterSettings = { ...emitterSettings };
     this.particleSettings = { ...particleSettings };
-    this.growthSettings = { ...growthSettings };
+    this.seed = this.normalizeSeed(seed);
+    this.growthSettings = { ...growthSettings, seed: this.seed };
     this.geometry = new BufferGeometry();
     this.positionAttr = new BufferAttribute(new Float32Array(0), 3);
     this.curvatureAttr = new BufferAttribute(new Float32Array(0), 1);
@@ -81,6 +87,7 @@ export class SwarmTrailsEngine {
     this.trailPoints = new Float32Array();
     this.headIndices = new Int32Array();
     this.filledLengths = new Int32Array();
+    this.trailCapacity = INITIAL_TRAIL_CAPACITY;
     this.emitterCount = 0;
     this.activeVertexCount = 0;
     this.time = 0;
@@ -88,12 +95,11 @@ export class SwarmTrailsEngine {
     this.curvatureScratch = new Float32Array(0);
     this.displacementScratch = new Float32Array(0);
 
-    const randomA = createSeededRandom(seed ^ 0x9e3779b9);
-    const randomB = createSeededRandom(seed ^ 0x243f6a88);
-    const randomC = createSeededRandom(seed ^ 0xb7e15162);
-    this.noiseA = new SimplexNoise(randomA);
-    this.noiseB = new SimplexNoise(randomB);
-    this.noiseC = new SimplexNoise(randomC);
+    this.noiseA = new SimplexNoise(createSeededRandom(1));
+    this.noiseB = new SimplexNoise(createSeededRandom(2));
+    this.noiseC = new SimplexNoise(createSeededRandom(3));
+    this.rebuildNoiseGenerators(this.seed);
+    this.discreteDirections = new Float32Array(0);
 
     this.rebuildState();
   }
@@ -109,9 +115,8 @@ export class SwarmTrailsEngine {
   getTrailStateView(): TrailStateView {
     return {
       trailPoints: this.trailPoints,
-      headIndices: this.headIndices,
       filledLengths: this.filledLengths,
-      trailLength: this.particleSettings.trailLength,
+      trailCapacity: this.trailCapacity,
       emitterCount: this.emitterCount,
     };
   }
@@ -126,20 +131,24 @@ export class SwarmTrailsEngine {
   }
 
   setParticleSettings(settings: ParticleSettings): void {
-    const previousTrailLength = this.particleSettings.trailLength;
+    const previousDiscreteResolution = this.particleSettings.discreteResolution;
     this.particleSettings = { ...settings };
-    if (previousTrailLength !== this.particleSettings.trailLength) {
-      this.rebuildState();
-      return;
-    }
     this.particleSettings.generationDistance = Math.max(
       MIN_GENERATION_DISTANCE,
       this.particleSettings.generationDistance,
     );
+    if (previousDiscreteResolution !== this.particleSettings.discreteResolution) {
+      this.discreteDirections = this.buildDiscreteDirections(this.particleSettings.discreteResolution);
+    }
   }
 
   setGrowthSettings(settings: GrowthSettings): void {
-    this.growthSettings = { ...settings };
+    const nextSeed = this.normalizeSeed(settings.seed);
+    this.growthSettings = { ...settings, seed: nextSeed };
+    if (nextSeed !== this.seed) {
+      this.seed = nextSeed;
+      this.rebuildNoiseGenerators(this.seed);
+    }
   }
 
   setGradientBlur(strength: number): void {
@@ -149,6 +158,7 @@ export class SwarmTrailsEngine {
 
   reset(): void {
     this.initializeTrailsFromOrigins();
+    this.rebuildGeometryBuffers();
     this.time = 0;
     this.rebuildGeometryFromTrails();
   }
@@ -161,6 +171,7 @@ export class SwarmTrailsEngine {
       trailPoints: Float32Array.from(this.trailPoints),
       headIndices: Int32Array.from(this.headIndices),
       filledLengths: Int32Array.from(this.filledLengths),
+      trailCapacity: this.trailCapacity,
       time: this.time,
     };
   }
@@ -170,17 +181,31 @@ export class SwarmTrailsEngine {
       snapshot.heads.length !== this.heads.length ||
       snapshot.velocities.length !== this.velocities.length ||
       snapshot.travel.length !== this.travel.length ||
-      snapshot.trailPoints.length !== this.trailPoints.length ||
       snapshot.headIndices.length !== this.headIndices.length ||
       snapshot.filledLengths.length !== this.filledLengths.length
     ) {
       return;
     }
 
+    const nextTrailCapacity = Math.max(MIN_TRAIL_CAPACITY, Math.round(snapshot.trailCapacity));
+    const expectedTrailPointsLength = this.emitterCount * nextTrailCapacity * 3;
+    if (snapshot.trailPoints.length !== expectedTrailPointsLength) {
+      return;
+    }
+
     this.heads.set(snapshot.heads);
     this.velocities.set(snapshot.velocities);
     this.travel.set(snapshot.travel);
-    this.trailPoints.set(snapshot.trailPoints);
+
+    if (nextTrailCapacity !== this.trailCapacity || snapshot.trailPoints.length !== this.trailPoints.length) {
+      this.trailCapacity = nextTrailCapacity;
+      this.trailPoints = Float32Array.from(snapshot.trailPoints);
+      this.ensureScratchCapacity(this.trailCapacity);
+      this.rebuildGeometryBuffers();
+    } else {
+      this.trailPoints.set(snapshot.trailPoints);
+    }
+
     this.headIndices.set(snapshot.headIndices);
     this.filledLengths.set(snapshot.filledLengths);
     this.time = snapshot.time;
@@ -219,6 +244,8 @@ export class SwarmTrailsEngine {
     const damping = MathUtils.clamp(this.growthSettings.damping, 0, 0.9999);
     const attractionStrength = Math.max(0, this.growthSettings.attraction);
     const generationDistance = Math.max(MIN_GENERATION_DISTANCE, this.particleSettings.generationDistance);
+    const nearestDirection = new Float32Array(3);
+    const latestTrailPoint = new Float32Array(3);
 
     for (let i = 0; i < this.emitterCount; i += 1) {
       const index = i * 3;
@@ -258,9 +285,6 @@ export class SwarmTrailsEngine {
       this.velocities[index] = vx;
       this.velocities[index + 1] = vy;
       this.velocities[index + 2] = vz;
-      this.heads[index] = nx;
-      this.heads[index + 1] = ny;
-      this.heads[index + 2] = nz;
 
       const dx = nx - px;
       const dy = ny - py;
@@ -268,18 +292,48 @@ export class SwarmTrailsEngine {
       const segmentLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const previousCarry = this.travel[i];
       const totalCarry = previousCarry + segmentLength;
+      let headX = nx;
+      let headY = ny;
+      let headZ = nz;
 
-      // Insert trail samples along the traveled segment so spacing is stable and
-      // we avoid repeated identical points (which fat lines render as dot clusters).
       if (segmentLength > 1e-8 && totalCarry >= generationDistance) {
+        this.getLatestTrailPoint(i, latestTrailPoint);
         let distanceToNextSample = generationDistance - previousCarry;
         while (distanceToNextSample <= segmentLength + 1e-8) {
           const t = distanceToNextSample / segmentLength;
-          this.pushTrailPoint(i, px + dx * t, py + dy * t, pz + dz * t);
+          const rawX = px + dx * t;
+          const rawY = py + dy * t;
+          const rawZ = pz + dz * t;
+          const stepX = rawX - latestTrailPoint[0];
+          const stepY = rawY - latestTrailPoint[1];
+          const stepZ = rawZ - latestTrailPoint[2];
+          const stepLength = Math.sqrt(stepX * stepX + stepY * stepY + stepZ * stepZ);
+          if (stepLength > 1e-8) {
+            const invStepLength = 1 / stepLength;
+            this.findNearestDiscreteDirection(
+              stepX * invStepLength,
+              stepY * invStepLength,
+              stepZ * invStepLength,
+              nearestDirection,
+            );
+            const quantizedX = latestTrailPoint[0] + nearestDirection[0] * stepLength;
+            const quantizedY = latestTrailPoint[1] + nearestDirection[1] * stepLength;
+            const quantizedZ = latestTrailPoint[2] + nearestDirection[2] * stepLength;
+            this.pushTrailPoint(i, quantizedX, quantizedY, quantizedZ);
+            latestTrailPoint[0] = quantizedX;
+            latestTrailPoint[1] = quantizedY;
+            latestTrailPoint[2] = quantizedZ;
+            headX = quantizedX;
+            headY = quantizedY;
+            headZ = quantizedZ;
+          }
           distanceToNextSample += generationDistance;
         }
       }
 
+      this.heads[index] = headX;
+      this.heads[index + 1] = headY;
+      this.heads[index + 2] = headZ;
       this.travel[i] = totalCarry % generationDistance;
     }
 
@@ -290,8 +344,7 @@ export class SwarmTrailsEngine {
   private rebuildState(): void {
     this.origins = this.buildEmitterOrigins();
     this.emitterCount = this.origins.length / 3;
-    this.curvatureScratch = new Float32Array(this.particleSettings.trailLength);
-    this.displacementScratch = new Float32Array(this.particleSettings.trailLength);
+    this.discreteDirections = this.buildDiscreteDirections(this.particleSettings.discreteResolution);
 
     this.initializeTrailsFromOrigins();
     this.rebuildGeometryBuffers();
@@ -299,12 +352,13 @@ export class SwarmTrailsEngine {
   }
 
   private initializeTrailsFromOrigins(): void {
-    const trailLength = this.particleSettings.trailLength;
-    const totalPointSlots = this.emitterCount * trailLength;
+    this.trailCapacity = Math.max(MIN_TRAIL_CAPACITY, INITIAL_TRAIL_CAPACITY);
+    this.ensureScratchCapacity(this.trailCapacity);
+
     this.heads = Float32Array.from(this.origins);
     this.velocities = new Float32Array(this.emitterCount * 3);
     this.travel = new Float32Array(this.emitterCount);
-    this.trailPoints = new Float32Array(totalPointSlots * 3);
+    this.trailPoints = new Float32Array(this.emitterCount * this.trailCapacity * 3);
     this.headIndices = new Int32Array(this.emitterCount);
     this.filledLengths = new Int32Array(this.emitterCount);
 
@@ -313,7 +367,7 @@ export class SwarmTrailsEngine {
       const tx = this.origins[sourceIndex];
       const ty = this.origins[sourceIndex + 1];
       const tz = this.origins[sourceIndex + 2];
-      const slotBase = emitter * trailLength * 3;
+      const slotBase = emitter * this.trailCapacity * 3;
       this.trailPoints[slotBase] = tx;
       this.trailPoints[slotBase + 1] = ty;
       this.trailPoints[slotBase + 2] = tz;
@@ -322,8 +376,46 @@ export class SwarmTrailsEngine {
     }
   }
 
+  private ensureScratchCapacity(requiredCount: number): void {
+    if (this.curvatureScratch.length < requiredCount) {
+      this.curvatureScratch = new Float32Array(requiredCount);
+    }
+    if (this.displacementScratch.length < requiredCount) {
+      this.displacementScratch = new Float32Array(requiredCount);
+    }
+  }
+
+  private ensureTrailCapacity(requiredPointCount: number): void {
+    if (requiredPointCount <= this.trailCapacity) {
+      return;
+    }
+
+    let nextCapacity = this.trailCapacity;
+    while (nextCapacity < requiredPointCount) {
+      nextCapacity *= 2;
+    }
+
+    const previousCapacity = this.trailCapacity;
+    const nextTrailPoints = new Float32Array(this.emitterCount * nextCapacity * 3);
+    for (let emitter = 0; emitter < this.emitterCount; emitter += 1) {
+      const filled = this.filledLengths[emitter];
+      if (filled <= 0) {
+        continue;
+      }
+      const oldBase = emitter * previousCapacity * 3;
+      const oldEnd = oldBase + filled * 3;
+      const newBase = emitter * nextCapacity * 3;
+      nextTrailPoints.set(this.trailPoints.subarray(oldBase, oldEnd), newBase);
+    }
+
+    this.trailPoints = nextTrailPoints;
+    this.trailCapacity = nextCapacity;
+    this.ensureScratchCapacity(this.trailCapacity);
+    this.rebuildGeometryBuffers();
+  }
+
   private rebuildGeometryBuffers(): void {
-    const maxSegments = this.emitterCount * Math.max(0, this.particleSettings.trailLength - 1);
+    const maxSegments = this.emitterCount * Math.max(0, this.trailCapacity - 1);
     const vertexCapacity = maxSegments * 2;
 
     if (this.geometry) {
@@ -371,29 +463,114 @@ export class SwarmTrailsEngine {
     return result;
   }
 
+  private buildDiscreteDirections(resolution: number): Float32Array {
+    const subdivisions = Math.max(1, Math.round(resolution));
+    const step = 2 / subdivisions;
+    const directions: number[] = [];
+
+    for (let z = 0; z <= subdivisions; z += 1) {
+      for (let y = 0; y <= subdivisions; y += 1) {
+        for (let x = 0; x <= subdivisions; x += 1) {
+          const isSurface =
+            x === 0 ||
+            x === subdivisions ||
+            y === 0 ||
+            y === subdivisions ||
+            z === 0 ||
+            z === subdivisions;
+          if (!isSurface) {
+            continue;
+          }
+
+          const vx = -1 + x * step;
+          const vy = -1 + y * step;
+          const vz = -1 + z * step;
+          const length = Math.sqrt(vx * vx + vy * vy + vz * vz);
+          if (length <= 1e-8) {
+            continue;
+          }
+          const invLength = 1 / length;
+          directions.push(vx * invLength, vy * invLength, vz * invLength);
+        }
+      }
+    }
+
+    return Float32Array.from(directions);
+  }
+
+  private normalizeSeed(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    const rounded = Math.max(0, Math.round(value));
+    return rounded >>> 0;
+  }
+
+  private rebuildNoiseGenerators(seed: number): void {
+    const randomA = createSeededRandom(seed ^ 0x9e3779b9);
+    const randomB = createSeededRandom(seed ^ 0x243f6a88);
+    const randomC = createSeededRandom(seed ^ 0xb7e15162);
+    this.noiseA = new SimplexNoise(randomA);
+    this.noiseB = new SimplexNoise(randomB);
+    this.noiseC = new SimplexNoise(randomC);
+  }
+
+  private findNearestDiscreteDirection(
+    nx: number,
+    ny: number,
+    nz: number,
+    out: Float32Array,
+  ): void {
+    if (this.discreteDirections.length < 3) {
+      out[0] = nx;
+      out[1] = ny;
+      out[2] = nz;
+      return;
+    }
+
+    let bestDot = -Infinity;
+    let best = 0;
+    for (let i = 0; i < this.discreteDirections.length; i += 3) {
+      const dot =
+        nx * this.discreteDirections[i] +
+        ny * this.discreteDirections[i + 1] +
+        nz * this.discreteDirections[i + 2];
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = i;
+      }
+    }
+
+    out[0] = this.discreteDirections[best];
+    out[1] = this.discreteDirections[best + 1];
+    out[2] = this.discreteDirections[best + 2];
+  }
+
+  private getLatestTrailPoint(emitterIndex: number, out: Float32Array): void {
+    const head = Math.max(0, this.headIndices[emitterIndex]);
+    const base = (emitterIndex * this.trailCapacity + head) * 3;
+    out[0] = this.trailPoints[base];
+    out[1] = this.trailPoints[base + 1];
+    out[2] = this.trailPoints[base + 2];
+  }
+
   private getTrailPoint(emitterIndex: number, orderedPointIndex: number, out: Float32Array): void {
-    const trailLength = this.particleSettings.trailLength;
-    const filled = this.filledLengths[emitterIndex];
-    const head = this.headIndices[emitterIndex];
-    const oldest = (head - (filled - 1) + trailLength) % trailLength;
-    const ringIndex = (oldest + orderedPointIndex) % trailLength;
-    const base = (emitterIndex * trailLength + ringIndex) * 3;
+    const pointIndex = Math.min(Math.max(orderedPointIndex, 0), this.filledLengths[emitterIndex] - 1);
+    const base = (emitterIndex * this.trailCapacity + pointIndex) * 3;
     out[0] = this.trailPoints[base];
     out[1] = this.trailPoints[base + 1];
     out[2] = this.trailPoints[base + 2];
   }
 
   private pushTrailPoint(emitterIndex: number, x: number, y: number, z: number): void {
-    const trailLength = this.particleSettings.trailLength;
-    const nextHead = (this.headIndices[emitterIndex] + 1) % trailLength;
-    this.headIndices[emitterIndex] = nextHead;
-    const write = (emitterIndex * trailLength + nextHead) * 3;
+    const nextIndex = this.filledLengths[emitterIndex];
+    this.ensureTrailCapacity(nextIndex + 1);
+    const write = (emitterIndex * this.trailCapacity + nextIndex) * 3;
     this.trailPoints[write] = x;
     this.trailPoints[write + 1] = y;
     this.trailPoints[write + 2] = z;
-    if (this.filledLengths[emitterIndex] < trailLength) {
-      this.filledLengths[emitterIndex] += 1;
-    }
+    this.headIndices[emitterIndex] = nextIndex;
+    this.filledLengths[emitterIndex] = nextIndex + 1;
   }
 
   private rebuildGeometryFromTrails(): void {
@@ -428,6 +605,8 @@ export class SwarmTrailsEngine {
       if (filled < 2) {
         continue;
       }
+
+      this.ensureScratchCapacity(filled);
 
       for (let point = 0; point < filled; point += 1) {
         this.getTrailPoint(emitter, point, p1);

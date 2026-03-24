@@ -34,7 +34,6 @@ import { buildTrailMeshGeometry } from './core/trailMeshBuilder';
 import type {
   AppState,
   EmitterSettings,
-  GradientType,
   GrowthSettings,
   MaterialSettings,
   ParticleSettings,
@@ -64,14 +63,18 @@ type UiRefs = {
   emitterSpacingYValue: HTMLSpanElement;
   emitterSpacingZ: HTMLInputElement;
   emitterSpacingZValue: HTMLSpanElement;
-  trailLength: HTMLInputElement;
-  trailLengthValue: HTMLSpanElement;
   generationDistance: HTMLInputElement;
   generationDistanceValue: HTMLSpanElement;
-  trailThickness: HTMLInputElement;
-  trailThicknessValue: HTMLSpanElement;
+  thicknessMin: HTMLInputElement;
+  thicknessMinValue: HTMLSpanElement;
+  thicknessMax: HTMLInputElement;
+  thicknessMaxValue: HTMLSpanElement;
+  thicknessSeed: HTMLInputElement;
+  thicknessSeedValue: HTMLSpanElement;
   discreteResolution: HTMLInputElement;
   discreteResolutionValue: HTMLSpanElement;
+  growthSeed: HTMLInputElement;
+  growthSeedValue: HTMLSpanElement;
   noiseScale: HTMLInputElement;
   noiseScaleValue: HTMLSpanElement;
   noiseSpeed: HTMLInputElement;
@@ -84,7 +87,6 @@ type UiRefs = {
   attractionValue: HTMLSpanElement;
   damping: HTMLInputElement;
   dampingValue: HTMLSpanElement;
-  gradientType: HTMLSelectElement;
   gradientStart: HTMLInputElement;
   gradientEnd: HTMLInputElement;
   curvatureContrast: HTMLInputElement;
@@ -109,7 +111,7 @@ type TimelineEntry = { step: number; snapshot: SwarmSnapshot };
 const MAX_TIMELINE_SNAPSHOTS = 120;
 const TIMELINE_SNAPSHOT_INTERVAL = 0.12;
 const MAX_TIMELINE_BYTES = 96 * 1024 * 1024;
-const NOISE_SEED = 351107;
+const SHOW_DISCRETE_VISUALIZATION = false;
 
 function revealUiWhenStyled(maxWaitMs = 1500): void {
   const start = performance.now();
@@ -137,10 +139,6 @@ function requiredElement<T extends Element>(
 
 function isInput(element: Element): element is HTMLInputElement {
   return element instanceof HTMLInputElement;
-}
-
-function isSelect(element: Element): element is HTMLSelectElement {
-  return element instanceof HTMLSelectElement;
 }
 
 function isButton(element: Element): element is HTMLButtonElement {
@@ -178,14 +176,18 @@ const ui: UiRefs = {
   emitterSpacingYValue: requiredElement('emitter-spacing-y-value', isSpan),
   emitterSpacingZ: requiredElement('emitter-spacing-z', isInput),
   emitterSpacingZValue: requiredElement('emitter-spacing-z-value', isSpan),
-  trailLength: requiredElement('trail-length', isInput),
-  trailLengthValue: requiredElement('trail-length-value', isSpan),
   generationDistance: requiredElement('generation-distance', isInput),
   generationDistanceValue: requiredElement('generation-distance-value', isSpan),
-  trailThickness: requiredElement('trail-thickness', isInput),
-  trailThicknessValue: requiredElement('trail-thickness-value', isSpan),
+  thicknessMin: requiredElement('thickness-min', isInput),
+  thicknessMinValue: requiredElement('thickness-min-value', isSpan),
+  thicknessMax: requiredElement('thickness-max', isInput),
+  thicknessMaxValue: requiredElement('thickness-max-value', isSpan),
+  thicknessSeed: requiredElement('thickness-seed', isInput),
+  thicknessSeedValue: requiredElement('thickness-seed-value', isSpan),
   discreteResolution: requiredElement('discrete-resolution', isInput),
   discreteResolutionValue: requiredElement('discrete-resolution-value', isSpan),
+  growthSeed: requiredElement('growth-seed', isInput),
+  growthSeedValue: requiredElement('growth-seed-value', isSpan),
   noiseScale: requiredElement('noise-scale', isInput),
   noiseScaleValue: requiredElement('noise-scale-value', isSpan),
   noiseSpeed: requiredElement('noise-speed', isInput),
@@ -198,7 +200,6 @@ const ui: UiRefs = {
   attractionValue: requiredElement('attraction-value', isSpan),
   damping: requiredElement('damping', isInput),
   dampingValue: requiredElement('damping-value', isSpan),
-  gradientType: requiredElement('gradient-type', isSelect),
   gradientStart: requiredElement('gradient-start-color', isInput),
   gradientEnd: requiredElement('gradient-end-color', isInput),
   curvatureContrast: requiredElement('curvature-contrast', isInput),
@@ -239,13 +240,15 @@ const emitterSettings: EmitterSettings = {
 };
 
 const particleSettings: ParticleSettings = {
-  trailLength: Number.parseInt(ui.trailLength.value, 10),
   generationDistance: Number.parseFloat(ui.generationDistance.value),
-  trailThickness: Number.parseFloat(ui.trailThickness.value),
+  thicknessMin: Number.parseFloat(ui.thicknessMin.value),
+  thicknessMax: Number.parseFloat(ui.thicknessMax.value),
+  thicknessSeed: Number.parseInt(ui.thicknessSeed.value, 10),
   discreteResolution: Number.parseInt(ui.discreteResolution.value, 10),
 };
 
 const growthSettings: GrowthSettings = {
+  seed: Number.parseInt(ui.growthSeed.value, 10),
   noiseScale: Number.parseFloat(ui.noiseScale.value),
   noiseSpeed: Number.parseFloat(ui.noiseSpeed.value),
   noiseStrength: Number.parseFloat(ui.noiseStrength.value),
@@ -255,7 +258,6 @@ const growthSettings: GrowthSettings = {
 };
 
 const materialSettings: MaterialSettings = {
-  gradientType: ui.gradientType.value as GradientType,
   gradientStart: ui.gradientStart.value,
   gradientEnd: ui.gradientEnd.value,
   curvatureContrast: Number.parseFloat(ui.curvatureContrast.value),
@@ -298,7 +300,7 @@ renderer.domElement.addEventListener('contextmenu', (event) => event.preventDefa
 window.addEventListener('contextmenu', (event) => event.preventDefault());
 
 const materialController = new MaterialController(materialSettings);
-const engine = new SwarmTrailsEngine(emitterSettings, particleSettings, growthSettings, NOISE_SEED);
+const engine = new SwarmTrailsEngine(emitterSettings, particleSettings, growthSettings, growthSettings.seed);
 engine.setGradientBlur(materialSettings.gradientBlur);
 
 let trailMeshGeometry = new BufferGeometry();
@@ -335,15 +337,17 @@ discreteBoxEdges.frustumCulled = false;
 discreteBoxCenterLines.frustumCulled = false;
 discreteBoxEdges.renderOrder = 1;
 discreteBoxCenterLines.renderOrder = 0;
+discreteBoxEdges.visible = SHOW_DISCRETE_VISUALIZATION;
+discreteBoxCenterLines.visible = SHOW_DISCRETE_VISUALIZATION;
 scene.add(discreteBoxCenterLines);
 scene.add(discreteBoxEdges);
 
 const MAX_EMITTER_MARKERS = 18 * 18 * 18;
-const emitterMarkerGeometry = new BoxGeometry(0.015, 0.015, 0.015);
+const emitterMarkerGeometry = new BoxGeometry(0.0075, 0.0075, 0.0075);
 const emitterMarkerMaterial = new MeshBasicMaterial({
   color: 0xf6fbff,
   transparent: true,
-  opacity: 0.9,
+  opacity: 0.55,
   depthWrite: false,
   depthTest: false,
 });
@@ -543,190 +547,6 @@ function bindSectionCollapseToggles(): void {
   });
 }
 
-function bindCustomSelect(select: HTMLSelectElement): void {
-  const control = select.closest('.select-control');
-  const shell = control?.querySelector('.select-shell');
-  if (!control || !shell) {
-    return;
-  }
-  select.classList.add('native-select-hidden');
-
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
-  trigger.className = 'select-trigger';
-  trigger.id = `${select.id}-trigger`;
-  trigger.setAttribute('aria-haspopup', 'listbox');
-  trigger.setAttribute('aria-expanded', 'false');
-
-  const menu = document.createElement('ul');
-  menu.className = 'select-menu';
-  menu.id = `${select.id}-menu`;
-  menu.hidden = true;
-  menu.setAttribute('role', 'listbox');
-  menu.setAttribute('aria-labelledby', trigger.id);
-
-  type OptionButton = HTMLButtonElement & { dataset: DOMStringMap & { value: string; index: string } };
-  const optionButtons: OptionButton[] = [];
-  const optionValues = Array.from(select.options).map((option) => option.value);
-
-  const buildOptionButton = (index: number, label: string, value: string): OptionButton => {
-    const item = document.createElement('li');
-    const button = document.createElement('button') as OptionButton;
-    button.type = 'button';
-    button.className = 'select-option';
-    button.dataset.value = value;
-    button.dataset.index = `${index}`;
-    button.textContent = label;
-    button.setAttribute('role', 'option');
-    item.appendChild(button);
-    menu.appendChild(item);
-    return button;
-  };
-
-  Array.from(select.options).forEach((option, index) => {
-    const button = buildOptionButton(index, option.textContent ?? option.value, option.value);
-    optionButtons.push(button);
-  });
-
-  let activeIndex = Math.max(0, optionValues.indexOf(select.value));
-
-  const setOpen = (open: boolean): void => {
-    control.classList.toggle('is-open', open);
-    menu.hidden = !open;
-    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-  };
-
-  const updateSelectionUi = (): void => {
-    const selectedIndex = Math.max(0, optionValues.indexOf(select.value));
-    const selectedButton = optionButtons[selectedIndex];
-    trigger.textContent = selectedButton?.textContent ?? select.value;
-    optionButtons.forEach((button, index) => {
-      const selected = index === selectedIndex;
-      const active = index === activeIndex;
-      button.classList.toggle('is-selected', selected);
-      button.classList.toggle('is-active', active);
-      button.setAttribute('aria-selected', selected ? 'true' : 'false');
-      button.tabIndex = active ? 0 : -1;
-    });
-  };
-
-  const setActiveIndex = (index: number): void => {
-    if (optionButtons.length === 0) {
-      return;
-    }
-    const count = optionButtons.length;
-    activeIndex = ((index % count) + count) % count;
-    updateSelectionUi();
-  };
-
-  const chooseIndex = (index: number): void => {
-    const nextValue = optionValues[index];
-    if (nextValue === undefined) {
-      return;
-    }
-    const changed = select.value !== nextValue;
-    select.value = nextValue;
-    activeIndex = index;
-    updateSelectionUi();
-    setOpen(false);
-    if (changed) {
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  };
-
-  const openMenu = (focusOption = false): void => {
-    setActiveIndex(Math.max(0, optionValues.indexOf(select.value)));
-    setOpen(true);
-    if (focusOption) {
-      optionButtons[activeIndex]?.focus();
-    }
-  };
-
-  select.addEventListener('change', () => {
-    activeIndex = Math.max(0, optionValues.indexOf(select.value));
-    updateSelectionUi();
-    setOpen(false);
-  });
-
-  trigger.addEventListener('click', () => {
-    if (control.classList.contains('is-open')) {
-      setOpen(false);
-    } else {
-      openMenu();
-    }
-  });
-
-  trigger.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      if (!control.classList.contains('is-open')) {
-        openMenu(true);
-      } else {
-        setActiveIndex(activeIndex + 1);
-        optionButtons[activeIndex]?.focus();
-      }
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (!control.classList.contains('is-open')) {
-        openMenu(true);
-      } else {
-        setActiveIndex(activeIndex - 1);
-        optionButtons[activeIndex]?.focus();
-      }
-    } else if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      if (control.classList.contains('is-open')) {
-        chooseIndex(activeIndex);
-      } else {
-        openMenu(true);
-      }
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      setOpen(false);
-    }
-  });
-
-  optionButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      const index = Number.parseInt(button.dataset.index, 10);
-      chooseIndex(index);
-      trigger.focus();
-    });
-    button.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setActiveIndex(activeIndex + 1);
-        optionButtons[activeIndex]?.focus();
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setActiveIndex(activeIndex - 1);
-        optionButtons[activeIndex]?.focus();
-      } else if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        chooseIndex(activeIndex);
-        trigger.focus();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        setOpen(false);
-        trigger.focus();
-      } else if (event.key === 'Tab') {
-        setOpen(false);
-      }
-    });
-  });
-
-  document.addEventListener('pointerdown', (event) => {
-    const target = event.target;
-    if (!(target instanceof Node) || !control.contains(target)) {
-      setOpen(false);
-    }
-  });
-
-  shell.prepend(menu);
-  shell.prepend(trigger);
-  updateSelectionUi();
-}
-
 function setStartButtonState(running: boolean): void {
   ui.start.textContent = running ? 'Pause' : 'Start';
   ui.start.classList.toggle('is-stop-state', running);
@@ -805,6 +625,9 @@ function buildDiscreteBoxGeometries(resolution: number): {
 }
 
 function rebuildDiscreteBoxVisualization(): void {
+  if (!SHOW_DISCRETE_VISUALIZATION) {
+    return;
+  }
   const { edgePositions, centerLinePositions } = buildDiscreteBoxGeometries(particleSettings.discreteResolution);
   const nextEdgeGeometry = new LineSegmentsGeometry();
   const nextCenterGeometry = new LineSegmentsGeometry();
@@ -998,8 +821,10 @@ function handleResize(): void {
   composer.setSize(width, height);
   bloomPass.setSize(width, height);
   fxaaPass.material.uniforms.resolution.value.set(1 / Math.max(width, 1), 1 / Math.max(height, 1));
-  discreteBoxEdgeMaterial.resolution.set(width, height);
-  discreteBoxCenterLineMaterial.resolution.set(width, height);
+  if (SHOW_DISCRETE_VISUALIZATION) {
+    discreteBoxEdgeMaterial.resolution.set(width, height);
+    discreteBoxCenterLineMaterial.resolution.set(width, height);
+  }
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   clampPanelToViewport();
@@ -1087,7 +912,6 @@ function exportCurrentTrailsAsGlb(filename: string): void {
 }
 
 bindSectionCollapseToggles();
-bindCustomSelect(ui.gradientType);
 
 bindRange(ui.growthSpeed, ui.growthSpeedValue, (value) => value.toFixed(2), (value) => {
   simulationSettings.growthSpeed = value;
@@ -1129,16 +953,20 @@ bindRange(ui.emitterSpacingZ, ui.emitterSpacingZValue, (value) => value.toFixed(
   applyEmitterAndParticleSettings(true);
 });
 
-bindRange(ui.trailLength, ui.trailLengthValue, (value) => `${Math.round(value)}`, (value) => {
-  particleSettings.trailLength = Math.round(value);
-  applyEmitterAndParticleSettings(true);
-});
 bindRange(ui.generationDistance, ui.generationDistanceValue, (value) => value.toFixed(3), (value) => {
   particleSettings.generationDistance = value;
   engine.setParticleSettings(particleSettings);
 });
-bindRange(ui.trailThickness, ui.trailThicknessValue, (value) => value.toFixed(2), (value) => {
-  particleSettings.trailThickness = value;
+bindRange(ui.thicknessMin, ui.thicknessMinValue, (value) => value.toFixed(2), (value) => {
+  particleSettings.thicknessMin = value;
+  trailMeshDirty = true;
+});
+bindRange(ui.thicknessMax, ui.thicknessMaxValue, (value) => value.toFixed(2), (value) => {
+  particleSettings.thicknessMax = value;
+  trailMeshDirty = true;
+});
+bindRange(ui.thicknessSeed, ui.thicknessSeedValue, (value) => `${Math.round(value)}`, (value) => {
+  particleSettings.thicknessSeed = Math.max(0, Math.round(value));
   trailMeshDirty = true;
 });
 bindRange(
@@ -1147,9 +975,19 @@ bindRange(
   (value) => `${Math.round(value)}`,
   (value) => {
     particleSettings.discreteResolution = Math.round(value);
+    engine.setParticleSettings(particleSettings);
     rebuildDiscreteBoxVisualization();
   },
 );
+bindRange(ui.growthSeed, ui.growthSeedValue, (value) => `${Math.round(value)}`, (value) => {
+  const nextSeed = Math.max(0, Math.round(value));
+  if (nextSeed === growthSettings.seed) {
+    return;
+  }
+  growthSettings.seed = nextSeed;
+  engine.setGrowthSettings(growthSettings);
+  resetSimulation();
+});
 bindRange(ui.noiseScale, ui.noiseScaleValue, (value) => value.toFixed(2), (value) => {
   growthSettings.noiseScale = value;
   engine.setGrowthSettings(growthSettings);
@@ -1213,12 +1051,6 @@ ui.gradientEnd.addEventListener('input', () => {
   materialController.setMaterialSettings(materialSettings);
   trailMeshDirty = true;
 });
-ui.gradientType.addEventListener('change', () => {
-  materialSettings.gradientType = ui.gradientType.value as GradientType;
-  materialController.setMaterialSettings(materialSettings);
-  trailMeshDirty = true;
-});
-
 ui.exportObj.addEventListener('click', () => {
   const geometry = getTrailMeshExportGeometry();
   if (!geometry) {

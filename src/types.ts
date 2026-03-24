@@ -1,5 +1,3 @@
-export type GradientType = 'curvature' | 'displacement';
-
 export type SimulationSettings = {
   growthSpeed: number;
 };
@@ -14,13 +12,15 @@ export type EmitterSettings = {
 };
 
 export type ParticleSettings = {
-  trailLength: number;
   generationDistance: number;
-  trailThickness: number;
+  thicknessMin: number;
+  thicknessMax: number;
+  thicknessSeed: number;
   discreteResolution: number;
 };
 
 export type GrowthSettings = {
+  seed: number;
   noiseScale: number;
   noiseSpeed: number;
   noiseStrength: number;
@@ -30,7 +30,6 @@ export type GrowthSettings = {
 };
 
 export type MaterialSettings = {
-  gradientType: GradientType;
   gradientStart: string;
   gradientEnd: string;
   curvatureContrast: number;

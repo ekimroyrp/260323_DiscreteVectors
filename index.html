@@ -92,73 +92,58 @@
             <label class="control">
               <div class="control-row">
                 <span>Spacing X</span>
-                <span id="emitter-spacing-x-value">0.22</span>
+                <span id="emitter-spacing-x-value">0.05</span>
               </div>
-              <input type="range" id="emitter-spacing-x" min="0.05" max="1.5" step="0.01" value="0.22" />
+              <input type="range" id="emitter-spacing-x" min="0.01" max="1.5" step="0.01" value="0.05" />
             </label>
 
             <label class="control">
               <div class="control-row">
                 <span>Spacing Y</span>
-                <span id="emitter-spacing-y-value">0.22</span>
+                <span id="emitter-spacing-y-value">0.05</span>
               </div>
-              <input type="range" id="emitter-spacing-y" min="0.05" max="1.5" step="0.01" value="0.22" />
+              <input type="range" id="emitter-spacing-y" min="0.01" max="1.5" step="0.01" value="0.05" />
             </label>
 
             <label class="control">
               <div class="control-row">
                 <span>Spacing Z</span>
-                <span id="emitter-spacing-z-value">0.22</span>
+                <span id="emitter-spacing-z-value">0.05</span>
               </div>
-              <input type="range" id="emitter-spacing-z" min="0.05" max="1.5" step="0.01" value="0.22" />
+              <input type="range" id="emitter-spacing-z" min="0.01" max="1.5" step="0.01" value="0.05" />
             </label>
           </div>
         </section>
 
         <section class="panel-section">
           <div class="panel-section-header">
-            <span class="panel-section-label">Particles</span>
+            <span class="panel-section-label">Flow</span>
           </div>
           <div class="panel-section-content panel-controls-stack">
             <label class="control">
               <div class="control-row">
-                <span>Trail Length</span>
-                <span id="trail-length-value">120</span>
+                <span>Seed</span>
+                <span id="growth-seed-value">351107</span>
               </div>
-              <input type="range" id="trail-length" min="8" max="320" step="1" value="120" />
+              <input type="range" id="growth-seed" min="0" max="999999" step="1" value="351107" />
             </label>
 
             <label class="control">
               <div class="control-row">
                 <span>Generation Distance</span>
-                <span id="generation-distance-value">0.015</span>
+                <span id="generation-distance-value">0.100</span>
               </div>
-              <input type="range" id="generation-distance" min="0.002" max="0.1" step="0.001" value="0.015" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Trail Thickness</span>
-                <span id="trail-thickness-value">1.00</span>
-              </div>
-              <input type="range" id="trail-thickness" min="1" max="8" step="0.1" value="1" />
+              <input type="range" id="generation-distance" min="0.002" max="1" step="0.001" value="0.1" />
             </label>
 
             <label class="control">
               <div class="control-row">
                 <span>Discrete Resolution</span>
-                <span id="discrete-resolution-value">6</span>
+                <span id="discrete-resolution-value">2</span>
               </div>
-              <input type="range" id="discrete-resolution" min="1" max="20" step="1" value="6" />
+              <input type="range" id="discrete-resolution" min="1" max="20" step="1" value="2" />
             </label>
-          </div>
-        </section>
 
-        <section class="panel-section">
-          <div class="panel-section-header">
-            <span class="panel-section-label">Growth</span>
-          </div>
-          <div class="panel-section-content panel-controls-stack">
             <label class="control">
               <div class="control-row">
                 <span>Noise Scale</span>
@@ -211,33 +196,52 @@
 
         <section class="panel-section">
           <div class="panel-section-header">
+            <span class="panel-section-label">Mesh</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Thickness Min</span>
+                <span id="thickness-min-value">1.00</span>
+              </div>
+              <input type="range" id="thickness-min" min="0.1" max="10" step="0.1" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Thickness Max</span>
+                <span id="thickness-max-value">3.00</span>
+              </div>
+              <input type="range" id="thickness-max" min="0.1" max="10" step="0.1" value="3" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Thickness Seed</span>
+                <span id="thickness-seed-value">0</span>
+              </div>
+              <input type="range" id="thickness-seed" min="0" max="999999" step="1" value="0" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
             <span class="panel-section-label">Material</span>
           </div>
           <div class="panel-section-content panel-controls-stack">
-            <label class="control select-control">
-              <div class="control-row">
-                <span>Gradient Type</span>
-              </div>
-              <span class="select-shell">
-                <select id="gradient-type">
-                  <option value="displacement" selected>Displacement</option>
-                  <option value="curvature">Curvature</option>
-                </select>
-              </span>
-            </label>
-
             <div class="control control-grid-2">
               <label class="control compact">
                 <div class="control-row">
                   <span>Gradient Start</span>
                 </div>
-                <input type="color" id="gradient-start-color" class="color-picker" value="#9fd8ff" />
+                <input type="color" id="gradient-start-color" class="color-picker" value="#b19eff" />
               </label>
               <label class="control compact">
                 <div class="control-row">
                   <span>Gradient End</span>
                 </div>
-                <input type="color" id="gradient-end-color" class="color-picker" value="#ff0000" />
+                <input type="color" id="gradient-end-color" class="color-picker" value="#ffae00" />
               </label>
             </div>
 

@@ -20,6 +20,21 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+function hashUint32(value: number): number {
+  let x = value >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d);
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b);
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+function seededRandom01(seed: number, index: number): number {
+  const mixed = hashUint32((seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0);
+  return mixed / 0x100000000;
+}
+
 function normalizeVector(x: number, y: number, z: number): [number, number, number] {
   const length = Math.sqrt(x * x + y * y + z * z);
   if (length <= 1e-8) {
@@ -34,11 +49,7 @@ function readTrailPoint(
   orderedPointIndex: number,
   out: Float32Array,
 ): void {
-  const filled = state.filledLengths[emitterIndex];
-  const head = state.headIndices[emitterIndex];
-  const oldest = (head - (filled - 1) + state.trailLength) % state.trailLength;
-  const ringIndex = (oldest + orderedPointIndex) % state.trailLength;
-  const read = (emitterIndex * state.trailLength + ringIndex) * 3;
+  const read = (emitterIndex * state.trailCapacity + orderedPointIndex) * 3;
   out[0] = state.trailPoints[read];
   out[1] = state.trailPoints[read + 1];
   out[2] = state.trailPoints[read + 2];
@@ -135,41 +146,33 @@ export function buildTrailMeshGeometry(
     return setEmptyGeometry(geometry);
   }
 
-  let maxDistance = 1e-6;
-  const scratchPoint = new Float32Array(3);
-  for (let emitter = 0; emitter < state.emitterCount; emitter += 1) {
-    const filled = state.filledLengths[emitter];
-    for (let i = 0; i < filled; i += 1) {
-      readTrailPoint(state, emitter, i, scratchPoint);
-      const d = Math.sqrt(
-        scratchPoint[0] * scratchPoint[0] +
-          scratchPoint[1] * scratchPoint[1] +
-          scratchPoint[2] * scratchPoint[2],
-      );
-      if (d > maxDistance) {
-        maxDistance = d;
-      }
-    }
-  }
-
   const positionsOut: number[] = [];
   const normalsOut: number[] = [];
   const colorsOut: number[] = [];
   const indicesOut: number[] = [];
   const start = new Color(materialSettings.gradientStart);
   const end = new Color(materialSettings.gradientEnd);
-  const smoothingStrength = Math.max(0, Math.min(1, (particleSettings.trailThickness - 1) / 7));
-  const minSpacing = Math.max(
-    1e-6,
-    particleSettings.generationDistance *
-      Math.min(0.9, Math.max(0.1, (particleSettings.trailThickness - 0.5) * 0.2)),
-  );
-  const minSpacingSq = minSpacing * minSpacing;
-  const profileHalfSize = Math.max(0.00075, particleSettings.trailThickness * 0.0032);
+  const minRaw = Math.min(10, Math.max(0.1, particleSettings.thicknessMin));
+  const maxRaw = Math.min(10, Math.max(0.1, particleSettings.thicknessMax));
+  const thicknessMin = Math.min(minRaw, maxRaw);
+  const thicknessMax = Math.max(minRaw, maxRaw);
+  const thicknessSpan = thicknessMax - thicknessMin;
+  const thicknessSeed = Math.max(0, Math.round(particleSettings.thicknessSeed)) >>> 0;
   const p1 = new Float32Array(3);
   let vertexOffset = 0;
 
   for (let emitter = 0; emitter < state.emitterCount; emitter += 1) {
+    const thicknessRandom = seededRandom01(thicknessSeed, emitter);
+    const trailThickness =
+      thicknessSpan <= 1e-6 ? thicknessMin : thicknessMin + thicknessRandom * thicknessSpan;
+    const smoothingStrength = Math.max(0, Math.min(1, (trailThickness - 1) / 9));
+    const minSpacing = Math.max(
+      1e-6,
+      particleSettings.generationDistance *
+        Math.min(0.95, Math.max(0.1, (trailThickness - 0.35) * 0.12)),
+    );
+    const minSpacingSq = minSpacing * minSpacing;
+    const profileHalfSize = Math.max(0.00075, trailThickness * 0.0032);
     const emitterBaseVertex = vertexOffset;
     const filled = state.filledLengths[emitter];
     if (filled < 2) {
@@ -216,42 +219,30 @@ export function buildTrailMeshGeometry(
       continue;
     }
 
-    const curvature = new Float32Array(pointCount);
     const displacement = new Float32Array(pointCount);
     const tangents = new Float32Array(pointCount * 3);
     const frameNormals = new Float32Array(pointCount * 3);
     const frameBinormals = new Float32Array(pointCount * 3);
     const pointColors = new Float32Array(pointCount * 3);
 
-    for (let i = 0; i < pointCount; i += 1) {
+    displacement[0] = 0;
+    let totalLength = 0;
+    for (let i = 1; i < pointCount; i += 1) {
       const read = i * 3;
-      const x = compactPositions[read];
-      const y = compactPositions[read + 1];
-      const z = compactPositions[read + 2];
-      displacement[i] = Math.sqrt(x * x + y * y + z * z) / maxDistance;
-      if (i === 0 || i === pointCount - 1) {
-        curvature[i] = 0;
-      } else {
-        const prev = read - 3;
-        const next = read + 3;
-        const ax = x - compactPositions[prev];
-        const ay = y - compactPositions[prev + 1];
-        const az = z - compactPositions[prev + 2];
-        const bx = compactPositions[next] - x;
-        const by = compactPositions[next + 1] - y;
-        const bz = compactPositions[next + 2] - z;
-        const al = Math.sqrt(ax * ax + ay * ay + az * az);
-        const bl = Math.sqrt(bx * bx + by * by + bz * bz);
-        if (al > 1e-6 && bl > 1e-6) {
-          const dot = Math.max(-1, Math.min(1, (ax * bx + ay * by + az * bz) / (al * bl)));
-          curvature[i] = Math.acos(dot) / Math.PI;
-        } else {
-          curvature[i] = 0;
-        }
-      }
+      const prev = read - 3;
+      const dx = compactPositions[read] - compactPositions[prev];
+      const dy = compactPositions[read + 1] - compactPositions[prev + 1];
+      const dz = compactPositions[read + 2] - compactPositions[prev + 2];
+      totalLength += Math.sqrt(dx * dx + dy * dy + dz * dz);
+      displacement[i] = totalLength;
     }
 
-    blurScalarSeries(curvature, pointCount, materialSettings.gradientBlur);
+    if (totalLength > 1e-8) {
+      const invLength = 1 / totalLength;
+      for (let i = 1; i < pointCount; i += 1) {
+        displacement[i] *= invLength;
+      }
+    }
     blurScalarSeries(displacement, pointCount, materialSettings.gradientBlur);
 
     for (let i = 0; i < pointCount; i += 1) {
@@ -340,9 +331,7 @@ export function buildTrailMeshGeometry(
       const bx = frameBinormals[read];
       const by = frameBinormals[read + 1];
       const bz = frameBinormals[read + 2];
-      const source =
-        materialSettings.gradientType === 'displacement' ? displacement[i] : curvature[i];
-      const t = clamp01(source * materialSettings.curvatureContrast + materialSettings.curvatureBias);
+      const t = clamp01(displacement[i] * materialSettings.curvatureContrast + materialSettings.curvatureBias);
       const cr = start.r + (end.r - start.r) * t;
       const cg = start.g + (end.g - start.g) * t;
       const cb = start.b + (end.b - start.b) * t;
