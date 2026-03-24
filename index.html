@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>260323_DiscreteVectors</title>
+    <style>
+      #ui-panel {
+        visibility: hidden;
+        opacity: 0;
+      }
+
+      html.ui-ready #ui-panel {
+        visibility: visible;
+        opacity: 1;
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/index-C9UfCdUT.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/three-core-DuGfpx6-.js">
+    <link rel="modulepreload" crossorigin href="./assets/three-extras-BXehNGOm.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-9-lIA5N_.css">
+  </head>
+  <body>
+    <div id="ui-panel" class="apple-panel">
+      <div id="ui-handle" class="panel-drag-handle">
+        <button
+          type="button"
+          id="collapse-toggle"
+          class="collapse-button panel-collapse-toggle"
+          aria-label="Collapse controls"
+          aria-expanded="true"
+        >
+          <span class="collapse-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="ui-body panel-sections">
+        <div class="control-hint">Wheel = Zoom, MMB = Pan, RMB = Orbit</div>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Simulation</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <div class="control control-grid-2">
+              <button type="button" id="start-sim" class="pill-button control-button-wide">Start</button>
+              <button type="button" id="reset-sim" class="pill-button control-button-wide">Reset</button>
+            </div>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Simulation Timeline</span>
+                <span id="simulation-timeline-value">0</span>
+              </div>
+              <input type="range" id="simulation-timeline" min="0" max="0" step="1" value="0" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Simulation Rate</span>
+                <span id="growth-speed-value">1.00</span>
+              </div>
+              <input type="range" id="growth-speed" min="0.1" max="3" step="0.01" value="1" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Emitter</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Spacing X</span>
+                <span id="emitter-spacing-x-value">0.05</span>
+              </div>
+              <input type="range" id="emitter-spacing-x" min="0.01" max="1.5" step="0.01" value="0.05" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Spacing Y</span>
+                <span id="emitter-spacing-y-value">0.05</span>
+              </div>
+              <input type="range" id="emitter-spacing-y" min="0.01" max="1.5" step="0.01" value="0.05" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Spacing Z</span>
+                <span id="emitter-spacing-z-value">0.05</span>
+              </div>
+              <input type="range" id="emitter-spacing-z" min="0.01" max="1.5" step="0.01" value="0.05" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count X</span>
+                <span id="emitter-count-x-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-x" min="1" max="18" step="1" value="6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count Y</span>
+                <span id="emitter-count-y-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-y" min="1" max="18" step="1" value="6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count Z</span>
+                <span id="emitter-count-z-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-z" min="1" max="18" step="1" value="6" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Flow</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Discrete Resolution</span>
+                <span id="discrete-resolution-value">2</span>
+              </div>
+              <input type="range" id="discrete-resolution" min="1" max="20" step="1" value="2" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Generation Distance</span>
+                <span id="generation-distance-value">0.100</span>
+              </div>
+              <input type="range" id="generation-distance" min="0.002" max="1" step="0.001" value="0.1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Momentum Damping</span>
+                <span id="damping-value">0.985</span>
+              </div>
+              <input type="range" id="damping" min="0.85" max="0.999" step="0.001" value="0.985" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Attraction Force</span>
+                <span id="attraction-value">0.25</span>
+              </div>
+              <input type="range" id="attraction" min="0" max="1.5" step="0.01" value="0.25" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Repulsion Force</span>
+                <span id="repulsion-value">0.10</span>
+              </div>
+              <input type="range" id="repulsion" min="0" max="1.5" step="0.01" value="0.1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Alignment Radius</span>
+                <span id="alignment-radius-value">0.16</span>
+              </div>
+              <input type="range" id="alignment-radius" min="0.05" max="2" step="0.01" value="0.16" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Alignment Strength</span>
+                <span id="alignment-strength-value">0.70</span>
+              </div>
+              <input type="range" id="alignment-strength" min="0" max="3" step="0.01" value="0.7" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Divergence Radius</span>
+                <span id="divergence-radius-value">0.16</span>
+              </div>
+              <input type="range" id="divergence-radius" min="0.05" max="2" step="0.01" value="0.16" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Divergence Strength</span>
+                <span id="divergence-strength-value">0.00</span>
+              </div>
+              <input type="range" id="divergence-strength" min="0" max="3" step="0.01" value="0" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Curl Frequency</span>
+                <span id="noise-scale-value">0.65</span>
+              </div>
+              <input type="range" id="noise-scale" min="0.05" max="4" step="0.01" value="0.65" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Curl Strength</span>
+                <span id="noise-strength-value">1.00</span>
+              </div>
+              <input type="range" id="noise-strength" min="0" max="3" step="0.01" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Curl Speed</span>
+                <span id="noise-speed-value">0.22</span>
+              </div>
+              <input type="range" id="noise-speed" min="0" max="2" step="0.01" value="0.22" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Curl Vorticity</span>
+                <span id="vorticity-value">1.00</span>
+              </div>
+              <input type="range" id="vorticity" min="0" max="2" step="0.01" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Octave Layers</span>
+                <span id="octaves-value">1</span>
+              </div>
+              <input type="range" id="octaves" min="1" max="8" step="1" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Octave Lacunarity</span>
+                <span id="lacunarity-value">2.00</span>
+              </div>
+              <input type="range" id="lacunarity" min="1" max="4" step="0.01" value="2" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Octave Gain</span>
+                <span id="gain-value">0.50</span>
+              </div>
+              <input type="range" id="gain" min="0" max="1" step="0.01" value="0.5" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Warp Frequency</span>
+                <span id="warp-scale-value">1.20</span>
+              </div>
+              <input type="range" id="warp-scale" min="0.05" max="4" step="0.01" value="1.2" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Warp Strength</span>
+                <span id="warp-strength-value">0.00</span>
+              </div>
+              <input type="range" id="warp-strength" min="0" max="2" step="0.01" value="0" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Flow Seed</span>
+                <span id="growth-seed-value">351107</span>
+              </div>
+              <input type="range" id="growth-seed" min="0" max="999999" step="1" value="351107" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Mesh</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Thickness Min</span>
+                <span id="thickness-min-value">1.00</span>
+              </div>
+              <input type="range" id="thickness-min" min="0.1" max="10" step="0.1" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Thickness Max</span>
+                <span id="thickness-max-value">3.00</span>
+              </div>
+              <input type="range" id="thickness-max" min="0.1" max="10" step="0.1" value="3" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Thickness Seed</span>
+                <span id="thickness-seed-value">0</span>
+              </div>
+              <input type="range" id="thickness-seed" min="0" max="999999" step="1" value="0" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Material</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <div class="control control-grid-2">
+              <label class="control compact">
+                <div class="control-row">
+                  <span>Gradient Start</span>
+                </div>
+                <input type="color" id="gradient-start-color" class="color-picker" value="#b19eff" />
+              </label>
+              <label class="control compact">
+                <div class="control-row">
+                  <span>Gradient End</span>
+                </div>
+                <input type="color" id="gradient-end-color" class="color-picker" value="#ffae00" />
+              </label>
+            </div>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Gradient Contrast</span>
+                <span id="curvature-contrast-value">1.40</span>
+              </div>
+              <input type="range" id="curvature-contrast" min="0.2" max="3" step="0.01" value="1.4" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Gradient Bias</span>
+                <span id="curvature-bias-value">-0.40</span>
+              </div>
+              <input type="range" id="curvature-bias" min="-1" max="1" step="0.01" value="-0.4" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Gradient Blur</span>
+                <span id="gradient-blur-value">0.35</span>
+              </div>
+              <input type="range" id="gradient-blur" min="0" max="1" step="0.01" value="0.35" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Fresnel</span>
+                <span id="fresnel-value">0.05</span>
+              </div>
+              <input type="range" id="fresnel" min="0" max="2" step="0.01" value="0.05" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Specular</span>
+                <span id="specular-value">2.00</span>
+              </div>
+              <input type="range" id="specular" min="0" max="2" step="0.01" value="2" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Bloom</span>
+                <span id="bloom-value">0.20</span>
+              </div>
+              <input type="range" id="bloom" min="0" max="2" step="0.01" value="0.2" />
+            </label>
+
+            <label class="control toggle-control toggle-control-stacked">
+              <span>Particle Display</span>
+              <input type="checkbox" id="particle-display" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Export</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <div class="control">
+              <button type="button" id="export-obj" class="pill-button control-button-wide">Export OBJ</button>
+            </div>
+            <div class="control">
+              <button type="button" id="export-glb" class="pill-button control-button-wide">Export GLB</button>
+            </div>
+            <div class="control">
+              <button type="button" id="export-screenshot" class="pill-button control-button-wide">Export Screenshot</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div id="ui-handle-bottom"></div>
+    </div>
+
+    <canvas id="app-canvas"></canvas>
+  </body>
+</html>

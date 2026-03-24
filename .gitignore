@@ -1,0 +1,4 @@
+# GitHub Pages branch artifacts
+*.log
+Thumbs.db
+.DS_Store
