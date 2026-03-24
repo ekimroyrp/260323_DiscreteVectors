@@ -700,16 +700,50 @@ export class SwarmTrailsEngine {
     const scale = Math.max(0.0001, this.growthSettings.noiseScale);
     const vorticity = Math.max(0, this.growthSettings.vorticity);
     const strength = Math.max(0, this.growthSettings.noiseStrength);
+    const octaves = Math.max(1, Math.min(8, Math.round(this.growthSettings.octaves)));
+    const lacunarity = Math.max(1, this.growthSettings.lacunarity);
+    const gain = MathUtils.clamp(this.growthSettings.gain, 0, 1);
+    const warpStrength = Math.max(0, this.growthSettings.warpStrength);
+    const warpScale = Math.max(0.0001, this.growthSettings.warpScale);
     const epsilon = 0.01;
 
-    const sample = (nx: number, ny: number, nz: number): { x: number; y: number; z: number } => {
-      const sx = nx * scale;
-      const sy = ny * scale;
-      const sz = nz * scale;
+    const fbm = (noise: SimplexNoise, nx: number, ny: number, nz: number): number => {
+      let sum = 0;
+      let amplitude = 1;
+      let frequency = 1;
+      let normalization = 0;
+      for (let octave = 0; octave < octaves; octave += 1) {
+        sum += noise.noise3d(nx * frequency, ny * frequency, nz * frequency) * amplitude;
+        normalization += amplitude;
+        amplitude *= gain;
+        frequency *= lacunarity;
+      }
+      return normalization > 1e-8 ? sum / normalization : 0;
+    };
+
+    const applyWarp = (nx: number, ny: number, nz: number): { x: number; y: number; z: number } => {
+      if (warpStrength <= 1e-8) {
+        return { x: nx, y: ny, z: nz };
+      }
+      const wx = fbm(this.noiseA, nx * warpScale + 11.3, ny * warpScale - 7.1 + t * 0.29, nz * warpScale + 3.4);
+      const wy = fbm(this.noiseB, nx * warpScale - 5.8, ny * warpScale + 13.7, nz * warpScale + t * 0.41 - 9.2);
+      const wz = fbm(this.noiseC, nx * warpScale + t * 0.37 + 1.9, ny * warpScale - 4.6, nz * warpScale + 8.8);
       return {
-        x: this.noiseA.noise3d(sy + t, sz, sx),
-        y: this.noiseB.noise3d(sz, sx + t * 0.87, sy),
-        z: this.noiseC.noise3d(sx, sy, sz + t * 1.13),
+        x: nx + wx * warpStrength,
+        y: ny + wy * warpStrength,
+        z: nz + wz * warpStrength,
+      };
+    };
+
+    const sample = (nx: number, ny: number, nz: number): { x: number; y: number; z: number } => {
+      const warped = applyWarp(nx, ny, nz);
+      const sx = warped.x * scale;
+      const sy = warped.y * scale;
+      const sz = warped.z * scale;
+      return {
+        x: fbm(this.noiseA, sy + t, sz, sx),
+        y: fbm(this.noiseB, sz, sx + t * 0.87, sy),
+        z: fbm(this.noiseC, sx, sy, sz + t * 1.13),
       };
     };
 

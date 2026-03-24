@@ -81,6 +81,16 @@ type UiRefs = {
   noiseSpeedValue: HTMLSpanElement;
   noiseStrength: HTMLInputElement;
   noiseStrengthValue: HTMLSpanElement;
+  octaves: HTMLInputElement;
+  octavesValue: HTMLSpanElement;
+  lacunarity: HTMLInputElement;
+  lacunarityValue: HTMLSpanElement;
+  gain: HTMLInputElement;
+  gainValue: HTMLSpanElement;
+  warpStrength: HTMLInputElement;
+  warpStrengthValue: HTMLSpanElement;
+  warpScale: HTMLInputElement;
+  warpScaleValue: HTMLSpanElement;
   vorticity: HTMLInputElement;
   vorticityValue: HTMLSpanElement;
   attraction: HTMLInputElement;
@@ -194,6 +204,16 @@ const ui: UiRefs = {
   noiseSpeedValue: requiredElement('noise-speed-value', isSpan),
   noiseStrength: requiredElement('noise-strength', isInput),
   noiseStrengthValue: requiredElement('noise-strength-value', isSpan),
+  octaves: requiredElement('octaves', isInput),
+  octavesValue: requiredElement('octaves-value', isSpan),
+  lacunarity: requiredElement('lacunarity', isInput),
+  lacunarityValue: requiredElement('lacunarity-value', isSpan),
+  gain: requiredElement('gain', isInput),
+  gainValue: requiredElement('gain-value', isSpan),
+  warpStrength: requiredElement('warp-strength', isInput),
+  warpStrengthValue: requiredElement('warp-strength-value', isSpan),
+  warpScale: requiredElement('warp-scale', isInput),
+  warpScaleValue: requiredElement('warp-scale-value', isSpan),
   vorticity: requiredElement('vorticity', isInput),
   vorticityValue: requiredElement('vorticity-value', isSpan),
   attraction: requiredElement('attraction', isInput),
@@ -252,6 +272,11 @@ const growthSettings: GrowthSettings = {
   noiseScale: Number.parseFloat(ui.noiseScale.value),
   noiseSpeed: Number.parseFloat(ui.noiseSpeed.value),
   noiseStrength: Number.parseFloat(ui.noiseStrength.value),
+  octaves: Number.parseInt(ui.octaves.value, 10),
+  lacunarity: Number.parseFloat(ui.lacunarity.value),
+  gain: Number.parseFloat(ui.gain.value),
+  warpStrength: Number.parseFloat(ui.warpStrength.value),
+  warpScale: Number.parseFloat(ui.warpScale.value),
   vorticity: Number.parseFloat(ui.vorticity.value),
   attraction: Number.parseFloat(ui.attraction.value),
   damping: Number.parseFloat(ui.damping.value),
@@ -998,6 +1023,26 @@ bindRange(ui.noiseSpeed, ui.noiseSpeedValue, (value) => value.toFixed(2), (value
 });
 bindRange(ui.noiseStrength, ui.noiseStrengthValue, (value) => value.toFixed(2), (value) => {
   growthSettings.noiseStrength = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.octaves, ui.octavesValue, (value) => `${Math.round(value)}`, (value) => {
+  growthSettings.octaves = Math.round(value);
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.lacunarity, ui.lacunarityValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.lacunarity = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.gain, ui.gainValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.gain = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.warpStrength, ui.warpStrengthValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.warpStrength = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.warpScale, ui.warpScaleValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.warpScale = value;
   engine.setGrowthSettings(growthSettings);
 });
 bindRange(ui.vorticity, ui.vorticityValue, (value) => value.toFixed(2), (value) => {

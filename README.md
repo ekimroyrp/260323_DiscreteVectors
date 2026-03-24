@@ -8,7 +8,7 @@
 - Mesh controls (`Thickness Min`, `Thickness Max`, `Thickness Seed`).
 - Mesh trail rendering with square-profile sweep and closed mesh ends.
 - Center discrete-space visualization: a wireframe subdivided box with center-to-vertex guide lines.
-- Flow controls for motion behavior (`Seed`, `Generation Distance`, `Discrete Resolution`, `Noise Scale`, `Noise Speed`, `Noise Strength`, `Vorticity`, `Attraction`, `Damping`).
+- Flow controls for motion behavior (`Seed`, `Generation Distance`, `Discrete Resolution`, `Noise Scale`, `Noise Speed`, `Noise Strength`, `Octaves`, `Lacunarity`, `Gain`, `Warp Strength`, `Warp Scale`, `Vorticity`, `Attraction`, `Damping`).
 - Material controls for gradient and lighting look (start/end colors, contrast, bias, blur, fresnel, specular, bloom).
 - Trail gradients are mapped from each trail's own start point to end point.
 - Trails always begin at emitter points and keep growing until simulation is paused or reset.
@@ -41,6 +41,8 @@
   - `Seed` controls deterministic variation of the curl-noise field (same seed + settings reproduces the same motion)
   - `Generation Distance` controls spacing between generated points along each trail
   - `Discrete Resolution` controls the discrete direction set used for vector snapping
+  - `Octaves`, `Lacunarity`, and `Gain` control layered fBm detail in the flow field
+  - `Warp Strength` and `Warp Scale` control domain warping before curl sampling
 - Mesh:
   - `Thickness Min` / `Thickness Max` set per-trail random thickness range
   - `Thickness Seed` shuffles which trail gets which thickness value

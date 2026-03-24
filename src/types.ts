@@ -24,6 +24,11 @@ export type GrowthSettings = {
   noiseScale: number;
   noiseSpeed: number;
   noiseStrength: number;
+  octaves: number;
+  lacunarity: number;
+  gain: number;
+  warpStrength: number;
+  warpScale: number;
   vorticity: number;
   attraction: number;
   damping: number;
