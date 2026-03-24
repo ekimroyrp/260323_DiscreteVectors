@@ -65,6 +65,8 @@ export class SwarmTrailsEngine {
   private discreteDirections: Float32Array;
   private curvatureScratch: Float32Array;
   private displacementScratch: Float32Array;
+  private headsPrev: Float32Array;
+  private velocitiesPrev: Float32Array;
 
   constructor(
     emitterSettings: EmitterSettings,
@@ -100,6 +102,8 @@ export class SwarmTrailsEngine {
     this.noiseC = new SimplexNoise(createSeededRandom(3));
     this.rebuildNoiseGenerators(this.seed);
     this.discreteDirections = new Float32Array(0);
+    this.headsPrev = new Float32Array(0);
+    this.velocitiesPrev = new Float32Array(0);
 
     this.rebuildState();
   }
@@ -224,15 +228,18 @@ export class SwarmTrailsEngine {
 
     const speed = Math.max(simulationRate, 0.05);
     const dt = safeDt * speed;
+    this.ensurePreviousBuffers();
+    this.headsPrev.set(this.heads);
+    this.velocitiesPrev.set(this.velocities);
 
     let centroidX = 0;
     let centroidY = 0;
     let centroidZ = 0;
     for (let i = 0; i < this.emitterCount; i += 1) {
       const index = i * 3;
-      centroidX += this.heads[index];
-      centroidY += this.heads[index + 1];
-      centroidZ += this.heads[index + 2];
+      centroidX += this.headsPrev[index];
+      centroidY += this.headsPrev[index + 1];
+      centroidZ += this.headsPrev[index + 2];
     }
     centroidX /= this.emitterCount;
     centroidY /= this.emitterCount;
@@ -243,15 +250,34 @@ export class SwarmTrailsEngine {
     const targetZ = centroidZ * CENTER_BLEND;
     const damping = MathUtils.clamp(this.growthSettings.damping, 0, 0.9999);
     const attractionStrength = Math.max(0, this.growthSettings.attraction);
+    const repulsionStrength = Math.max(0, this.growthSettings.repulsion);
+    const targetForceStrength = attractionStrength - repulsionStrength;
+    const alignmentStrength = Math.max(0, this.growthSettings.alignmentStrength);
+    const alignmentRadius = Math.max(0.001, this.growthSettings.alignmentRadius);
+    const divergenceStrength = Math.max(0, this.growthSettings.divergenceStrength);
+    const divergenceRadius = Math.max(0.001, this.growthSettings.divergenceRadius);
+    const useAlignment = alignmentStrength > 1e-6 && this.emitterCount > 1;
+    const useDivergence = divergenceStrength > 1e-6 && this.emitterCount > 1;
+    const alignmentBuckets = useAlignment
+      ? this.buildAlignmentBuckets(this.headsPrev, alignmentRadius)
+      : null;
+    const divergenceBuckets =
+      useDivergence && useAlignment && Math.abs(divergenceRadius - alignmentRadius) <= 1e-6
+        ? alignmentBuckets
+        : useDivergence
+          ? this.buildAlignmentBuckets(this.headsPrev, divergenceRadius)
+          : null;
     const generationDistance = Math.max(MIN_GENERATION_DISTANCE, this.particleSettings.generationDistance);
     const nearestDirection = new Float32Array(3);
     const latestTrailPoint = new Float32Array(3);
+    const alignmentForce = new Float32Array(3);
+    const divergenceForce = new Float32Array(3);
 
     for (let i = 0; i < this.emitterCount; i += 1) {
       const index = i * 3;
-      const px = this.heads[index];
-      const py = this.heads[index + 1];
-      const pz = this.heads[index + 2];
+      const px = this.headsPrev[index];
+      const py = this.headsPrev[index + 1];
+      const pz = this.headsPrev[index + 2];
 
       const curl = this.sampleCurl(px, py, pz, this.time);
 
@@ -259,8 +285,8 @@ export class SwarmTrailsEngine {
       let ty = targetY - py;
       let tz = targetZ - pz;
       const targetDistance = Math.sqrt(tx * tx + ty * ty + tz * tz);
-      if (targetDistance > 1e-6) {
-        const inv = attractionStrength / targetDistance;
+      if (targetDistance > 1e-6 && Math.abs(targetForceStrength) > 1e-6) {
+        const inv = targetForceStrength / targetDistance;
         tx *= inv;
         ty *= inv;
         tz *= inv;
@@ -270,13 +296,46 @@ export class SwarmTrailsEngine {
         tz = 0;
       }
 
-      const accelerationX = curl.x + tx;
-      const accelerationY = curl.y + ty;
-      const accelerationZ = curl.z + tz;
+      if (alignmentBuckets) {
+        this.computeAlignmentForce(
+          i,
+          this.headsPrev,
+          this.velocitiesPrev,
+          alignmentBuckets,
+          alignmentRadius,
+          alignmentForce,
+        );
+      } else {
+        alignmentForce[0] = 0;
+        alignmentForce[1] = 0;
+        alignmentForce[2] = 0;
+      }
 
-      const vx = this.velocities[index] * damping + accelerationX * dt;
-      const vy = this.velocities[index + 1] * damping + accelerationY * dt;
-      const vz = this.velocities[index + 2] * damping + accelerationZ * dt;
+      if (divergenceBuckets) {
+        this.computeAlignmentForce(
+          i,
+          this.headsPrev,
+          this.velocitiesPrev,
+          divergenceBuckets,
+          divergenceRadius,
+          divergenceForce,
+        );
+      } else {
+        divergenceForce[0] = 0;
+        divergenceForce[1] = 0;
+        divergenceForce[2] = 0;
+      }
+
+      const accelerationX =
+        curl.x + tx + alignmentForce[0] * alignmentStrength - divergenceForce[0] * divergenceStrength;
+      const accelerationY =
+        curl.y + ty + alignmentForce[1] * alignmentStrength - divergenceForce[1] * divergenceStrength;
+      const accelerationZ =
+        curl.z + tz + alignmentForce[2] * alignmentStrength - divergenceForce[2] * divergenceStrength;
+
+      const vx = this.velocitiesPrev[index] * damping + accelerationX * dt;
+      const vy = this.velocitiesPrev[index + 1] * damping + accelerationY * dt;
+      const vz = this.velocitiesPrev[index + 2] * damping + accelerationZ * dt;
 
       const nx = px + vx * dt;
       const ny = py + vy * dt;
@@ -361,6 +420,9 @@ export class SwarmTrailsEngine {
     this.trailPoints = new Float32Array(this.emitterCount * this.trailCapacity * 3);
     this.headIndices = new Int32Array(this.emitterCount);
     this.filledLengths = new Int32Array(this.emitterCount);
+    this.ensurePreviousBuffers();
+    this.headsPrev.fill(0);
+    this.velocitiesPrev.fill(0);
 
     for (let emitter = 0; emitter < this.emitterCount; emitter += 1) {
       const sourceIndex = emitter * 3;
@@ -383,6 +445,144 @@ export class SwarmTrailsEngine {
     if (this.displacementScratch.length < requiredCount) {
       this.displacementScratch = new Float32Array(requiredCount);
     }
+  }
+
+  private ensurePreviousBuffers(): void {
+    const size = this.emitterCount * 3;
+    if (this.headsPrev.length !== size) {
+      this.headsPrev = new Float32Array(size);
+    }
+    if (this.velocitiesPrev.length !== size) {
+      this.velocitiesPrev = new Float32Array(size);
+    }
+  }
+
+  private buildAlignmentBuckets(
+    heads: Float32Array,
+    cellSize: number,
+  ): Map<string, number[]> {
+    const buckets = new Map<string, number[]>();
+    const invCell = 1 / Math.max(cellSize, 1e-6);
+    for (let i = 0; i < this.emitterCount; i += 1) {
+      const read = i * 3;
+      const cx = Math.floor(heads[read] * invCell);
+      const cy = Math.floor(heads[read + 1] * invCell);
+      const cz = Math.floor(heads[read + 2] * invCell);
+      const key = `${cx}|${cy}|${cz}`;
+      const bucket = buckets.get(key);
+      if (bucket) {
+        bucket.push(i);
+      } else {
+        buckets.set(key, [i]);
+      }
+    }
+    return buckets;
+  }
+
+  private computeAlignmentForce(
+    emitterIndex: number,
+    heads: Float32Array,
+    velocities: Float32Array,
+    buckets: Map<string, number[]>,
+    radius: number,
+    out: Float32Array,
+  ): void {
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = 0;
+
+    const radiusSq = radius * radius;
+    const invCell = 1 / Math.max(radius, 1e-6);
+    const read = emitterIndex * 3;
+    const px = heads[read];
+    const py = heads[read + 1];
+    const pz = heads[read + 2];
+    const cx = Math.floor(px * invCell);
+    const cy = Math.floor(py * invCell);
+    const cz = Math.floor(pz * invCell);
+
+    let sumX = 0;
+    let sumY = 0;
+    let sumZ = 0;
+    let neighborCount = 0;
+
+    for (let dz = -1; dz <= 1; dz += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const key = `${cx + dx}|${cy + dy}|${cz + dz}`;
+          const bucket = buckets.get(key);
+          if (!bucket) {
+            continue;
+          }
+          for (let bi = 0; bi < bucket.length; bi += 1) {
+            const neighborIndex = bucket[bi];
+            if (neighborIndex === emitterIndex) {
+              continue;
+            }
+            const nRead = neighborIndex * 3;
+            const dxp = heads[nRead] - px;
+            const dyp = heads[nRead + 1] - py;
+            const dzp = heads[nRead + 2] - pz;
+            const distSq = dxp * dxp + dyp * dyp + dzp * dzp;
+            if (distSq > radiusSq) {
+              continue;
+            }
+
+            const nvx = velocities[nRead];
+            const nvy = velocities[nRead + 1];
+            const nvz = velocities[nRead + 2];
+            const nLenSq = nvx * nvx + nvy * nvy + nvz * nvz;
+            if (nLenSq <= 1e-10) {
+              continue;
+            }
+
+            const nInv = 1 / Math.sqrt(nLenSq);
+            sumX += nvx * nInv;
+            sumY += nvy * nInv;
+            sumZ += nvz * nInv;
+            neighborCount += 1;
+          }
+        }
+      }
+    }
+
+    if (neighborCount <= 0) {
+      return;
+    }
+
+    const sumLenSq = sumX * sumX + sumY * sumY + sumZ * sumZ;
+    if (sumLenSq <= 1e-10) {
+      return;
+    }
+    const sumInv = 1 / Math.sqrt(sumLenSq);
+    const avgX = sumX * sumInv;
+    const avgY = sumY * sumInv;
+    const avgZ = sumZ * sumInv;
+
+    const svx = velocities[read];
+    const svy = velocities[read + 1];
+    const svz = velocities[read + 2];
+    const selfLenSq = svx * svx + svy * svy + svz * svz;
+    const selfInv = selfLenSq > 1e-10 ? 1 / Math.sqrt(selfLenSq) : 0;
+    const selfX = svx * selfInv;
+    const selfY = svy * selfInv;
+    const selfZ = svz * selfInv;
+
+    let fx = avgX - selfX;
+    let fy = avgY - selfY;
+    let fz = avgZ - selfZ;
+    const forceLenSq = fx * fx + fy * fy + fz * fz;
+    if (forceLenSq <= 1e-10) {
+      return;
+    }
+
+    const forceInv = 1 / Math.sqrt(forceLenSq);
+    fx *= forceInv;
+    fy *= forceInv;
+    fz *= forceInv;
+    out[0] = fx;
+    out[1] = fy;
+    out[2] = fz;
   }
 
   private ensureTrailCapacity(requiredPointCount: number): void {

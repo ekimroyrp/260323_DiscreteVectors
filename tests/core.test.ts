@@ -44,6 +44,11 @@ const baseGrowth: GrowthSettings = {
   warpScale: 1.2,
   vorticity: 1,
   attraction: 0.2,
+  repulsion: 0,
+  alignmentStrength: 0,
+  divergenceStrength: 0,
+  divergenceRadius: 0.3,
+  alignmentRadius: 0.3,
   damping: 0.985,
 };
 
@@ -203,6 +208,59 @@ describe('SwarmTrailsEngine trail generation', () => {
     expect(Math.abs(ordered[0])).toBeLessThan(1e-8);
     expect(Math.abs(ordered[1])).toBeLessThan(1e-8);
     expect(Math.abs(ordered[2])).toBeLessThan(1e-8);
+  });
+
+  it('increases local heading coherence when alignment force is enabled', () => {
+    const emitter = { countX: 2, countY: 2, countZ: 2, spacingX: 0.2, spacingY: 0.2, spacingZ: 0.2 };
+    const particles = { generationDistance: 0.015, thicknessMin: 1, thicknessMax: 1, thicknessSeed: 0, discreteResolution: 4 };
+
+    const withoutAlignment = new SwarmTrailsEngine(
+      emitter,
+      particles,
+      { ...baseGrowth, attraction: 0, alignmentStrength: 0, alignmentRadius: 0.5 },
+      321,
+    );
+    const withAlignment = new SwarmTrailsEngine(
+      emitter,
+      particles,
+      { ...baseGrowth, attraction: 0, alignmentStrength: 1.2, alignmentRadius: 0.5 },
+      321,
+    );
+
+    for (let i = 0; i < 180; i += 1) {
+      withoutAlignment.step(1 / 60, 1);
+      withAlignment.step(1 / 60, 1);
+    }
+
+    const coherence = (velocities: Float32Array): number => {
+      let sumX = 0;
+      let sumY = 0;
+      let sumZ = 0;
+      let active = 0;
+      for (let i = 0; i < velocities.length; i += 3) {
+        const vx = velocities[i];
+        const vy = velocities[i + 1];
+        const vz = velocities[i + 2];
+        const lenSq = vx * vx + vy * vy + vz * vz;
+        if (lenSq <= 1e-10) {
+          continue;
+        }
+        const inv = 1 / Math.sqrt(lenSq);
+        sumX += vx * inv;
+        sumY += vy * inv;
+        sumZ += vz * inv;
+        active += 1;
+      }
+      if (active <= 1) {
+        return 0;
+      }
+      const meanLen = Math.sqrt(sumX * sumX + sumY * sumY + sumZ * sumZ);
+      return meanLen / active;
+    };
+
+    const noAlignCoherence = coherence(withoutAlignment.exportSnapshot().velocities);
+    const alignCoherence = coherence(withAlignment.exportSnapshot().velocities);
+    expect(alignCoherence).toBeGreaterThan(noAlignCoherence + 0.05);
   });
 });
 

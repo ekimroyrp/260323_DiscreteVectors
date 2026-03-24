@@ -31,6 +31,11 @@ export type GrowthSettings = {
   warpScale: number;
   vorticity: number;
   attraction: number;
+  repulsion: number;
+  alignmentStrength: number;
+  divergenceStrength: number;
+  divergenceRadius: number;
+  alignmentRadius: number;
   damping: number;
 };
 

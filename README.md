@@ -7,8 +7,8 @@
 - Centered emitter cube controls (`Count X/Y/Z` and `Spacing X/Y/Z`).
 - Mesh controls (`Thickness Min`, `Thickness Max`, `Thickness Seed`).
 - Mesh trail rendering with square-profile sweep and closed mesh ends.
-- Center discrete-space visualization: a wireframe subdivided box with center-to-vertex guide lines.
-- Flow controls for motion behavior (`Seed`, `Generation Distance`, `Discrete Resolution`, `Noise Scale`, `Noise Speed`, `Noise Strength`, `Octaves`, `Lacunarity`, `Gain`, `Warp Strength`, `Warp Scale`, `Vorticity`, `Attraction`, `Damping`).
+- Discrete direction quantization (`Discrete Resolution`) for stepped vector-field motion.
+- Flow controls for motion behavior (`Discrete Resolution`, `Generation Distance`, `Momentum Damping`, `Attraction Force`, `Repulsion Force`, `Alignment Radius`, `Alignment Strength`, `Divergence Radius`, `Divergence Strength`, `Curl Frequency`, `Curl Strength`, `Curl Speed`, `Curl Vorticity`, `Octave Layers`, `Octave Lacunarity`, `Octave Gain`, `Warp Frequency`, `Warp Strength`, `Flow Seed`).
 - Material controls for gradient and lighting look (start/end colors, contrast, bias, blur, fresnel, specular, bloom).
 - Trail gradients are mapped from each trail's own start point to end point.
 - Trails always begin at emitter points and keep growing until simulation is paused or reset.
@@ -38,11 +38,16 @@
   - `Reset` rebuilds the swarm from current emitter/particle settings and shows emitter start markers
   - `Simulation Timeline` scrubs through recorded snapshots while paused
 - Flow:
-  - `Seed` controls deterministic variation of the curl-noise field (same seed + settings reproduces the same motion)
+  - `Flow Seed` controls deterministic variation of the curl-noise field (same seed + settings reproduces the same motion)
+  - `Momentum Damping` controls velocity retention per step
   - `Generation Distance` controls spacing between generated points along each trail
   - `Discrete Resolution` controls the discrete direction set used for vector snapping
-  - `Octaves`, `Lacunarity`, and `Gain` control layered fBm detail in the flow field
-  - `Warp Strength` and `Warp Scale` control domain warping before curl sampling
+  - `Attraction Force` and `Repulsion Force` pull/push particles relative to the swarm convergence target
+  - `Alignment Radius` and `Alignment Strength` add local neighbor-heading alignment force
+  - `Divergence Radius` and `Divergence Strength` apply opposite (anti-alignment) neighbor steering
+  - `Curl Frequency`, `Curl Strength`, `Curl Speed`, and `Curl Vorticity` control the curl field behavior
+  - `Octave Layers`, `Octave Lacunarity`, and `Octave Gain` control layered fBm detail in the flow field
+  - `Warp Frequency` and `Warp Strength` control domain warping before curl sampling
 - Mesh:
   - `Thickness Min` / `Thickness Max` set per-trail random thickness range
   - `Thickness Seed` shuffles which trail gets which thickness value

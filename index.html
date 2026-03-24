@@ -67,30 +67,6 @@
           <div class="panel-section-content panel-controls-stack">
             <label class="control">
               <div class="control-row">
-                <span>Count X</span>
-                <span id="emitter-count-x-value">6</span>
-              </div>
-              <input type="range" id="emitter-count-x" min="1" max="18" step="1" value="6" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Count Y</span>
-                <span id="emitter-count-y-value">6</span>
-              </div>
-              <input type="range" id="emitter-count-y" min="1" max="18" step="1" value="6" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Count Z</span>
-                <span id="emitter-count-z-value">6</span>
-              </div>
-              <input type="range" id="emitter-count-z" min="1" max="18" step="1" value="6" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
                 <span>Spacing X</span>
                 <span id="emitter-spacing-x-value">0.05</span>
               </div>
@@ -112,6 +88,30 @@
               </div>
               <input type="range" id="emitter-spacing-z" min="0.01" max="1.5" step="0.01" value="0.05" />
             </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count X</span>
+                <span id="emitter-count-x-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-x" min="1" max="18" step="1" value="6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count Y</span>
+                <span id="emitter-count-y-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-y" min="1" max="18" step="1" value="6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count Z</span>
+                <span id="emitter-count-z-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-z" min="1" max="18" step="1" value="6" />
+            </label>
           </div>
         </section>
 
@@ -122,10 +122,10 @@
           <div class="panel-section-content panel-controls-stack">
             <label class="control">
               <div class="control-row">
-                <span>Seed</span>
-                <span id="growth-seed-value">351107</span>
+                <span>Discrete Resolution</span>
+                <span id="discrete-resolution-value">2</span>
               </div>
-              <input type="range" id="growth-seed" min="0" max="999999" step="1" value="351107" />
+              <input type="range" id="discrete-resolution" min="1" max="20" step="1" value="2" />
             </label>
 
             <label class="control">
@@ -138,15 +138,63 @@
 
             <label class="control">
               <div class="control-row">
-                <span>Discrete Resolution</span>
-                <span id="discrete-resolution-value">2</span>
+                <span>Momentum Damping</span>
+                <span id="damping-value">0.985</span>
               </div>
-              <input type="range" id="discrete-resolution" min="1" max="20" step="1" value="2" />
+              <input type="range" id="damping" min="0.85" max="0.999" step="0.001" value="0.985" />
             </label>
 
             <label class="control">
               <div class="control-row">
-                <span>Noise Scale</span>
+                <span>Attraction Force</span>
+                <span id="attraction-value">0.25</span>
+              </div>
+              <input type="range" id="attraction" min="0" max="1.5" step="0.01" value="0.25" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Repulsion Force</span>
+                <span id="repulsion-value">0.10</span>
+              </div>
+              <input type="range" id="repulsion" min="0" max="1.5" step="0.01" value="0.1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Alignment Radius</span>
+                <span id="alignment-radius-value">0.16</span>
+              </div>
+              <input type="range" id="alignment-radius" min="0.05" max="2" step="0.01" value="0.16" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Alignment Strength</span>
+                <span id="alignment-strength-value">0.70</span>
+              </div>
+              <input type="range" id="alignment-strength" min="0" max="3" step="0.01" value="0.7" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Divergence Radius</span>
+                <span id="divergence-radius-value">0.16</span>
+              </div>
+              <input type="range" id="divergence-radius" min="0.05" max="2" step="0.01" value="0.16" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Divergence Strength</span>
+                <span id="divergence-strength-value">0.00</span>
+              </div>
+              <input type="range" id="divergence-strength" min="0" max="3" step="0.01" value="0" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Curl Frequency</span>
                 <span id="noise-scale-value">0.65</span>
               </div>
               <input type="range" id="noise-scale" min="0.05" max="4" step="0.01" value="0.65" />
@@ -154,15 +202,7 @@
 
             <label class="control">
               <div class="control-row">
-                <span>Noise Speed</span>
-                <span id="noise-speed-value">0.22</span>
-              </div>
-              <input type="range" id="noise-speed" min="0" max="2" step="0.01" value="0.22" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Noise Strength</span>
+                <span>Curl Strength</span>
                 <span id="noise-strength-value">1.00</span>
               </div>
               <input type="range" id="noise-strength" min="0" max="3" step="0.01" value="1" />
@@ -170,7 +210,23 @@
 
             <label class="control">
               <div class="control-row">
-                <span>Octaves</span>
+                <span>Curl Speed</span>
+                <span id="noise-speed-value">0.22</span>
+              </div>
+              <input type="range" id="noise-speed" min="0" max="2" step="0.01" value="0.22" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Curl Vorticity</span>
+                <span id="vorticity-value">1.00</span>
+              </div>
+              <input type="range" id="vorticity" min="0" max="2" step="0.01" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Octave Layers</span>
                 <span id="octaves-value">1</span>
               </div>
               <input type="range" id="octaves" min="1" max="8" step="1" value="1" />
@@ -178,7 +234,7 @@
 
             <label class="control">
               <div class="control-row">
-                <span>Lacunarity</span>
+                <span>Octave Lacunarity</span>
                 <span id="lacunarity-value">2.00</span>
               </div>
               <input type="range" id="lacunarity" min="1" max="4" step="0.01" value="2" />
@@ -186,10 +242,18 @@
 
             <label class="control">
               <div class="control-row">
-                <span>Gain</span>
+                <span>Octave Gain</span>
                 <span id="gain-value">0.50</span>
               </div>
               <input type="range" id="gain" min="0" max="1" step="0.01" value="0.5" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Warp Frequency</span>
+                <span id="warp-scale-value">1.20</span>
+              </div>
+              <input type="range" id="warp-scale" min="0.05" max="4" step="0.01" value="1.2" />
             </label>
 
             <label class="control">
@@ -202,34 +266,10 @@
 
             <label class="control">
               <div class="control-row">
-                <span>Warp Scale</span>
-                <span id="warp-scale-value">1.20</span>
+                <span>Flow Seed</span>
+                <span id="growth-seed-value">351107</span>
               </div>
-              <input type="range" id="warp-scale" min="0.05" max="4" step="0.01" value="1.2" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Vorticity</span>
-                <span id="vorticity-value">1.00</span>
-              </div>
-              <input type="range" id="vorticity" min="0" max="2" step="0.01" value="1" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Attraction</span>
-                <span id="attraction-value">0.25</span>
-              </div>
-              <input type="range" id="attraction" min="0" max="1.5" step="0.01" value="0.25" />
-            </label>
-
-            <label class="control">
-              <div class="control-row">
-                <span>Damping</span>
-                <span id="damping-value">0.985</span>
-              </div>
-              <input type="range" id="damping" min="0.85" max="0.999" step="0.001" value="0.985" />
+              <input type="range" id="growth-seed" min="0" max="999999" step="1" value="351107" />
             </label>
           </div>
         </section>
@@ -320,17 +360,17 @@
             <label class="control">
               <div class="control-row">
                 <span>Specular</span>
-                <span id="specular-value">0.60</span>
+                <span id="specular-value">2.00</span>
               </div>
-              <input type="range" id="specular" min="0" max="2" step="0.01" value="0.6" />
+              <input type="range" id="specular" min="0" max="2" step="0.01" value="2" />
             </label>
 
             <label class="control">
               <div class="control-row">
                 <span>Bloom</span>
-                <span id="bloom-value">0.05</span>
+                <span id="bloom-value">0.20</span>
               </div>
-              <input type="range" id="bloom" min="0" max="2" step="0.01" value="0.05" />
+              <input type="range" id="bloom" min="0" max="2" step="0.01" value="0.2" />
             </label>
           </div>
         </section>

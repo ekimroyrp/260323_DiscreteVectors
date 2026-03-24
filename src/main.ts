@@ -95,6 +95,16 @@ type UiRefs = {
   vorticityValue: HTMLSpanElement;
   attraction: HTMLInputElement;
   attractionValue: HTMLSpanElement;
+  repulsion: HTMLInputElement;
+  repulsionValue: HTMLSpanElement;
+  alignmentStrength: HTMLInputElement;
+  alignmentStrengthValue: HTMLSpanElement;
+  divergenceStrength: HTMLInputElement;
+  divergenceStrengthValue: HTMLSpanElement;
+  divergenceRadius: HTMLInputElement;
+  divergenceRadiusValue: HTMLSpanElement;
+  alignmentRadius: HTMLInputElement;
+  alignmentRadiusValue: HTMLSpanElement;
   damping: HTMLInputElement;
   dampingValue: HTMLSpanElement;
   gradientStart: HTMLInputElement;
@@ -218,6 +228,16 @@ const ui: UiRefs = {
   vorticityValue: requiredElement('vorticity-value', isSpan),
   attraction: requiredElement('attraction', isInput),
   attractionValue: requiredElement('attraction-value', isSpan),
+  repulsion: requiredElement('repulsion', isInput),
+  repulsionValue: requiredElement('repulsion-value', isSpan),
+  alignmentStrength: requiredElement('alignment-strength', isInput),
+  alignmentStrengthValue: requiredElement('alignment-strength-value', isSpan),
+  divergenceStrength: requiredElement('divergence-strength', isInput),
+  divergenceStrengthValue: requiredElement('divergence-strength-value', isSpan),
+  divergenceRadius: requiredElement('divergence-radius', isInput),
+  divergenceRadiusValue: requiredElement('divergence-radius-value', isSpan),
+  alignmentRadius: requiredElement('alignment-radius', isInput),
+  alignmentRadiusValue: requiredElement('alignment-radius-value', isSpan),
   damping: requiredElement('damping', isInput),
   dampingValue: requiredElement('damping-value', isSpan),
   gradientStart: requiredElement('gradient-start-color', isInput),
@@ -279,6 +299,11 @@ const growthSettings: GrowthSettings = {
   warpScale: Number.parseFloat(ui.warpScale.value),
   vorticity: Number.parseFloat(ui.vorticity.value),
   attraction: Number.parseFloat(ui.attraction.value),
+  repulsion: Number.parseFloat(ui.repulsion.value),
+  alignmentStrength: Number.parseFloat(ui.alignmentStrength.value),
+  divergenceStrength: Number.parseFloat(ui.divergenceStrength.value),
+  divergenceRadius: Number.parseFloat(ui.divergenceRadius.value),
+  alignmentRadius: Number.parseFloat(ui.alignmentRadius.value),
   damping: Number.parseFloat(ui.damping.value),
 };
 
@@ -1051,6 +1076,31 @@ bindRange(ui.vorticity, ui.vorticityValue, (value) => value.toFixed(2), (value) 
 });
 bindRange(ui.attraction, ui.attractionValue, (value) => value.toFixed(2), (value) => {
   growthSettings.attraction = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.repulsion, ui.repulsionValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.repulsion = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.alignmentStrength, ui.alignmentStrengthValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.alignmentStrength = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(
+  ui.divergenceStrength,
+  ui.divergenceStrengthValue,
+  (value) => value.toFixed(2),
+  (value) => {
+    growthSettings.divergenceStrength = value;
+    engine.setGrowthSettings(growthSettings);
+  },
+);
+bindRange(ui.divergenceRadius, ui.divergenceRadiusValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.divergenceRadius = value;
+  engine.setGrowthSettings(growthSettings);
+});
+bindRange(ui.alignmentRadius, ui.alignmentRadiusValue, (value) => value.toFixed(2), (value) => {
+  growthSettings.alignmentRadius = value;
   engine.setGrowthSettings(growthSettings);
 });
 bindRange(ui.damping, ui.dampingValue, (value) => value.toFixed(3), (value) => {
