@@ -16,6 +16,7 @@ export type EmitterSettings = {
 export type ParticleSettings = {
   trailLength: number;
   generationDistance: number;
+  trailThickness: number;
 };
 
 export type GrowthSettings = {

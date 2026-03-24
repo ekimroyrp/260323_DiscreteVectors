@@ -12,6 +12,14 @@ export type SwarmSnapshot = {
   time: number;
 };
 
+export type TrailStateView = {
+  trailPoints: Float32Array;
+  headIndices: Int32Array;
+  filledLengths: Int32Array;
+  trailLength: number;
+  emitterCount: number;
+};
+
 const CENTER_BLEND = 0.6;
 const MIN_GENERATION_DISTANCE = 0.0001;
 
@@ -96,6 +104,16 @@ export class SwarmTrailsEngine {
 
   getEmitterOrigins(): Float32Array {
     return Float32Array.from(this.origins);
+  }
+
+  getTrailStateView(): TrailStateView {
+    return {
+      trailPoints: this.trailPoints,
+      headIndices: this.headIndices,
+      filledLengths: this.filledLengths,
+      trailLength: this.particleSettings.trailLength,
+      emitterCount: this.emitterCount,
+    };
   }
 
   getActiveVertexCount(): number {
@@ -247,12 +265,22 @@ export class SwarmTrailsEngine {
       const dx = nx - px;
       const dy = ny - py;
       const dz = nz - pz;
-      this.travel[i] += Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const segmentLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const previousCarry = this.travel[i];
+      const totalCarry = previousCarry + segmentLength;
 
-      while (this.travel[i] >= generationDistance) {
-        this.pushTrailPoint(i, nx, ny, nz);
-        this.travel[i] -= generationDistance;
+      // Insert trail samples along the traveled segment so spacing is stable and
+      // we avoid repeated identical points (which fat lines render as dot clusters).
+      if (segmentLength > 1e-8 && totalCarry >= generationDistance) {
+        let distanceToNextSample = generationDistance - previousCarry;
+        while (distanceToNextSample <= segmentLength + 1e-8) {
+          const t = distanceToNextSample / segmentLength;
+          this.pushTrailPoint(i, px + dx * t, py + dy * t, pz + dz * t);
+          distanceToNextSample += generationDistance;
+        }
       }
+
+      this.travel[i] = totalCarry % generationDistance;
     }
 
     this.time += dt * this.growthSettings.noiseSpeed;

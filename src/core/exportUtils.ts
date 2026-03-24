@@ -25,6 +25,47 @@ export function buildObjWithVertexColors(
   return `${linesOut.join('\n')}\n`;
 }
 
+export function buildObjMeshWithVertexColors(geometry: BufferGeometry): string {
+  const position = geometry.getAttribute('position') as BufferAttribute | undefined;
+  const color = geometry.getAttribute('color') as BufferAttribute | undefined;
+  const index = geometry.getIndex();
+  if (!position || position.count < 3) {
+    return '# Swarm trails OBJ export\n';
+  }
+
+  const count = position.count;
+  const format = (value: number): string => value.toFixed(6);
+  const linesOut: string[] = [];
+  linesOut.push('# Swarm trails OBJ export (mesh)');
+  linesOut.push('# Vertex colors encoded as: v x y z r g b');
+
+  for (let i = 0; i < count; i += 1) {
+    const r = color?.getX(i) ?? 1;
+    const g = color?.getY(i) ?? 1;
+    const b = color?.getZ(i) ?? 1;
+    linesOut.push(
+      `v ${format(position.getX(i))} ${format(position.getY(i))} ${format(position.getZ(i))} ${format(r)} ${format(g)} ${format(b)}`,
+    );
+  }
+
+  if (index) {
+    const indexCount = index.count - (index.count % 3);
+    for (let i = 0; i < indexCount; i += 3) {
+      const a = index.getX(i) + 1;
+      const b = index.getX(i + 1) + 1;
+      const c = index.getX(i + 2) + 1;
+      linesOut.push(`f ${a} ${b} ${c}`);
+    }
+  } else {
+    const faceCount = count - (count % 3);
+    for (let i = 0; i < faceCount; i += 3) {
+      linesOut.push(`f ${i + 1} ${i + 2} ${i + 3}`);
+    }
+  }
+
+  return `${linesOut.join('\n')}\n`;
+}
+
 export function buildActiveLineGeometry(
   sourceGeometry: BufferGeometry,
   activeVertexCount: number,

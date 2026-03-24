@@ -6,10 +6,9 @@ import {
   BufferGeometry,
   Color,
   InstancedMesh,
-  LineBasicMaterial,
-  LineSegments,
   Matrix4,
   MOUSE,
+  Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
   SRGBColorSpace,
@@ -24,9 +23,10 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
-import { buildActiveLineGeometry, buildObjWithVertexColors } from './core/exportUtils';
+import { buildObjMeshWithVertexColors } from './core/exportUtils';
 import { MaterialController } from './core/materialController';
 import { SwarmTrailsEngine, type SwarmSnapshot } from './core/swarmTrailsEngine';
+import { buildTrailMeshGeometry } from './core/trailMeshBuilder';
 import type {
   AppState,
   EmitterSettings,
@@ -64,6 +64,8 @@ type UiRefs = {
   trailLengthValue: HTMLSpanElement;
   generationDistance: HTMLInputElement;
   generationDistanceValue: HTMLSpanElement;
+  trailThickness: HTMLInputElement;
+  trailThicknessValue: HTMLSpanElement;
   noiseScale: HTMLInputElement;
   noiseScaleValue: HTMLSpanElement;
   noiseSpeed: HTMLInputElement;
@@ -174,6 +176,8 @@ const ui: UiRefs = {
   trailLengthValue: requiredElement('trail-length-value', isSpan),
   generationDistance: requiredElement('generation-distance', isInput),
   generationDistanceValue: requiredElement('generation-distance-value', isSpan),
+  trailThickness: requiredElement('trail-thickness', isInput),
+  trailThicknessValue: requiredElement('trail-thickness-value', isSpan),
   noiseScale: requiredElement('noise-scale', isInput),
   noiseScaleValue: requiredElement('noise-scale-value', isSpan),
   noiseSpeed: requiredElement('noise-speed', isInput),
@@ -229,6 +233,7 @@ const emitterSettings: EmitterSettings = {
 const particleSettings: ParticleSettings = {
   trailLength: Number.parseInt(ui.trailLength.value, 10),
   generationDistance: Number.parseFloat(ui.generationDistance.value),
+  trailThickness: Number.parseFloat(ui.trailThickness.value),
 };
 
 const growthSettings: GrowthSettings = {
@@ -287,11 +292,13 @@ const materialController = new MaterialController(materialSettings);
 const engine = new SwarmTrailsEngine(emitterSettings, particleSettings, growthSettings, NOISE_SEED);
 engine.setGradientBlur(materialSettings.gradientBlur);
 
-const lines = new LineSegments(engine.getGeometry(), materialController.material);
-scene.add(lines);
+let trailMeshGeometry = new BufferGeometry();
+const trailMesh = new Mesh(trailMeshGeometry, materialController.material);
+trailMesh.frustumCulled = false;
+scene.add(trailMesh);
 
 const MAX_EMITTER_MARKERS = 18 * 18 * 18;
-const emitterMarkerGeometry = new BoxGeometry(0.03, 0.03, 0.03);
+const emitterMarkerGeometry = new BoxGeometry(0.015, 0.015, 0.015);
 const emitterMarkerMaterial = new MeshBasicMaterial({
   color: 0xf6fbff,
   transparent: true,
@@ -329,12 +336,10 @@ let timelineSliderSyncing = false;
 let timelineRangeBound = false;
 let snapshotAccumulator = 0;
 let maxTimelineEntries = MAX_TIMELINE_SNAPSHOTS;
+let trailMeshDirty = true;
+let emitterMarkersStartVisible = true;
 let draggingPanel = false;
 const dragOffset = { x: 0, y: 0 };
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
 
 function updateRangeProgress(input: HTMLInputElement): void {
   const min = Number.parseFloat(input.min);
@@ -688,7 +693,7 @@ function setStartButtonState(running: boolean): void {
 }
 
 function syncEmitterMarkerVisibility(): void {
-  emitterMarkers.visible = !appState.running;
+  emitterMarkers.visible = emitterMarkersStartVisible && !appState.running;
 }
 
 function rebuildEmitterMarkers(): void {
@@ -705,7 +710,19 @@ function rebuildEmitterMarkers(): void {
 }
 
 function syncEngineGeometryReference(): void {
-  lines.geometry = engine.getGeometry();
+  trailMeshDirty = true;
+}
+
+function updateTrailMeshGeometry(): void {
+  if (!trailMeshDirty) {
+    return;
+  }
+  trailMeshDirty = false;
+  const state = engine.getTrailStateView();
+  const nextGeometry = buildTrailMeshGeometry(state, particleSettings, materialSettings);
+  trailMeshGeometry.dispose();
+  trailMeshGeometry = nextGeometry;
+  trailMesh.geometry = trailMeshGeometry;
 }
 
 function syncTimelineSliderState(): void {
@@ -816,6 +833,7 @@ function seekTimelineStep(step: number): void {
 
 function startSimulation(): void {
   appState.running = true;
+  emitterMarkersStartVisible = false;
   setStartButtonState(true);
   syncEmitterMarkerVisibility();
   syncTimelineSliderState();
@@ -833,7 +851,9 @@ function resetSimulation(): void {
     stopSimulation();
   }
   engine.reset();
+  emitterMarkersStartVisible = true;
   syncEngineGeometryReference();
+  syncEmitterMarkerVisibility();
   resetTimelineToCurrentState();
 }
 
@@ -873,28 +893,16 @@ function handleResize(): void {
   camera.updateProjectionMatrix();
   clampPanelToViewport();
 }
-function buildExportVertexColors(geometry: BufferGeometry, vertexCount: number): Float32Array {
-  const curvature = geometry.getAttribute('aCurvature') as BufferAttribute | undefined;
-  const displacement = geometry.getAttribute('aDisplacement') as BufferAttribute | undefined;
-  const colors = new Float32Array(vertexCount * 3);
-  const start = new Color(materialSettings.gradientStart);
-  const end = new Color(materialSettings.gradientEnd);
-  const color = new Color();
-
-  for (let i = 0; i < vertexCount; i += 1) {
-    const write = i * 3;
-    const source =
-      materialSettings.gradientType === 'displacement'
-        ? displacement?.getX(i) ?? 0
-        : curvature?.getX(i) ?? 0;
-    const t = clamp01(source * materialSettings.curvatureContrast + materialSettings.curvatureBias);
-    color.copy(start).lerp(end, t);
-    colors[write] = clamp01(color.r);
-    colors[write + 1] = clamp01(color.g);
-    colors[write + 2] = clamp01(color.b);
+function getTrailMeshExportGeometry(): BufferGeometry | null {
+  if (trailMeshDirty) {
+    updateTrailMeshGeometry();
   }
-
-  return colors;
+  const geometry = trailMesh.geometry as BufferGeometry;
+  const position = geometry.getAttribute('position') as BufferAttribute | undefined;
+  if (!position || position.count < 3) {
+    return null;
+  }
+  return geometry;
 }
 
 function downloadBlob(filename: string, blob: Blob): void {
@@ -932,19 +940,16 @@ function exportScreenshot(filename: string): void {
 }
 
 function exportCurrentTrailsAsGlb(filename: string): void {
-  const sourceGeometry = engine.getGeometry();
-  const activeVertexCount = engine.getActiveVertexCount();
-  if (activeVertexCount < 2) {
-    console.warn('GLB export skipped: not enough trail vertices.');
+  const sourceGeometry = getTrailMeshExportGeometry();
+  if (!sourceGeometry) {
+    console.warn('GLB export skipped: not enough mesh geometry.');
     return;
   }
 
-  const colors = buildExportVertexColors(sourceGeometry, activeVertexCount);
-  const exportGeometry = buildActiveLineGeometry(sourceGeometry, activeVertexCount, colors);
-
-  const exportMaterial = new LineBasicMaterial({ vertexColors: true });
-  const exportLines = new LineSegments(exportGeometry, exportMaterial);
-  exportLines.name = 'SwarmTrails';
+  const exportGeometry = sourceGeometry.clone();
+  const exportMaterial = new MeshBasicMaterial({ vertexColors: true });
+  const exportMesh = new Mesh(exportGeometry, exportMaterial);
+  exportMesh.name = 'SwarmTrails';
 
   const cleanup = (): void => {
     exportGeometry.dispose();
@@ -953,7 +958,7 @@ function exportCurrentTrailsAsGlb(filename: string): void {
 
   const exporter = new GLTFExporter();
   exporter.parse(
-    exportLines,
+    exportMesh,
     (result) => {
       if (result instanceof ArrayBuffer) {
         downloadBinary(filename, result, 'model/gltf-binary');
@@ -1021,6 +1026,10 @@ bindRange(ui.generationDistance, ui.generationDistanceValue, (value) => value.to
   particleSettings.generationDistance = value;
   engine.setParticleSettings(particleSettings);
 });
+bindRange(ui.trailThickness, ui.trailThicknessValue, (value) => value.toFixed(2), (value) => {
+  particleSettings.trailThickness = value;
+  trailMeshDirty = true;
+});
 bindRange(ui.noiseScale, ui.noiseScaleValue, (value) => value.toFixed(2), (value) => {
   growthSettings.noiseScale = value;
   engine.setGrowthSettings(growthSettings);
@@ -1049,14 +1058,17 @@ bindRange(ui.damping, ui.dampingValue, (value) => value.toFixed(3), (value) => {
 bindRange(ui.curvatureContrast, ui.curvatureContrastValue, (value) => value.toFixed(2), (value) => {
   materialSettings.curvatureContrast = value;
   materialController.setMaterialSettings(materialSettings);
+  trailMeshDirty = true;
 });
 bindRange(ui.curvatureBias, ui.curvatureBiasValue, (value) => value.toFixed(2), (value) => {
   materialSettings.curvatureBias = value;
   materialController.setMaterialSettings(materialSettings);
+  trailMeshDirty = true;
 });
 bindRange(ui.gradientBlur, ui.gradientBlurValue, (value) => value.toFixed(2), (value) => {
   materialSettings.gradientBlur = value;
   engine.setGradientBlur(value);
+  trailMeshDirty = true;
 });
 bindRange(ui.fresnel, ui.fresnelValue, (value) => value.toFixed(2), (value) => {
   materialSettings.fresnel = value;
@@ -1074,25 +1086,26 @@ bindRange(ui.bloom, ui.bloomValue, (value) => value.toFixed(2), (value) => {
 ui.gradientStart.addEventListener('input', () => {
   materialSettings.gradientStart = ui.gradientStart.value;
   materialController.setMaterialSettings(materialSettings);
+  trailMeshDirty = true;
 });
 ui.gradientEnd.addEventListener('input', () => {
   materialSettings.gradientEnd = ui.gradientEnd.value;
   materialController.setMaterialSettings(materialSettings);
+  trailMeshDirty = true;
 });
 ui.gradientType.addEventListener('change', () => {
   materialSettings.gradientType = ui.gradientType.value as GradientType;
   materialController.setMaterialSettings(materialSettings);
+  trailMeshDirty = true;
 });
 
 ui.exportObj.addEventListener('click', () => {
-  const geometry = engine.getGeometry();
-  const activeVertexCount = engine.getActiveVertexCount();
-  if (activeVertexCount < 2) {
-    console.warn('OBJ export skipped: not enough trail vertices.');
+  const geometry = getTrailMeshExportGeometry();
+  if (!geometry) {
+    console.warn('OBJ export skipped: not enough mesh geometry.');
     return;
   }
-  const colors = buildExportVertexColors(geometry, activeVertexCount);
-  const obj = buildObjWithVertexColors(geometry, activeVertexCount, colors);
+  const obj = buildObjMeshWithVertexColors(geometry);
   downloadObj(`swarm-trails-step-${currentTimelineStep}.obj`, obj);
 });
 
@@ -1181,6 +1194,7 @@ renderer.setAnimationLoop((now) => {
     }
   }
 
+  updateTrailMeshGeometry();
   composer.render();
 });
 

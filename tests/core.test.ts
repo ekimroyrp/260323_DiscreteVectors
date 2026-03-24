@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { BufferAttribute } from 'three';
-import { buildActiveLineGeometry, buildObjWithVertexColors } from '../src/core/exportUtils';
+import { BufferAttribute, BufferGeometry } from 'three';
+import {
+  buildActiveLineGeometry,
+  buildObjMeshWithVertexColors,
+  buildObjWithVertexColors,
+} from '../src/core/exportUtils';
+import { buildTrailMeshGeometry } from '../src/core/trailMeshBuilder';
 import { SwarmTrailsEngine } from '../src/core/swarmTrailsEngine';
-import type { EmitterSettings, GrowthSettings, ParticleSettings } from '../src/types';
+import type {
+  EmitterSettings,
+  GrowthSettings,
+  MaterialSettings,
+  ParticleSettings,
+} from '../src/types';
+import type { TrailStateView } from '../src/core/swarmTrailsEngine';
 
 const baseEmitter: EmitterSettings = {
   countX: 3,
@@ -16,6 +27,7 @@ const baseEmitter: EmitterSettings = {
 const baseParticles: ParticleSettings = {
   trailLength: 32,
   generationDistance: 0.02,
+  trailThickness: 1,
 };
 
 const baseGrowth: GrowthSettings = {
@@ -76,7 +88,7 @@ describe('SwarmTrailsEngine trail generation', () => {
   it('keeps fixed-length trails and approximately respects generation distance', () => {
     const engine = new SwarmTrailsEngine(
       { countX: 1, countY: 1, countZ: 1, spacingX: 0.2, spacingY: 0.2, spacingZ: 0.2 },
-      { trailLength: 20, generationDistance: 0.015 },
+      { trailLength: 20, generationDistance: 0.015, trailThickness: 1 },
       { ...baseGrowth, attraction: 0.05 },
       77,
     );
@@ -93,17 +105,21 @@ describe('SwarmTrailsEngine trail generation', () => {
     const ordered = trailPointsInOrder(snapshot.trailPoints, 20, snapshot.headIndices[0], filled);
     let total = 0;
     let segments = 0;
+    let minSegment = Number.POSITIVE_INFINITY;
     for (let i = 0; i < ordered.length - 3; i += 3) {
       const dx = ordered[i + 3] - ordered[i];
       const dy = ordered[i + 4] - ordered[i + 1];
       const dz = ordered[i + 5] - ordered[i + 2];
-      total += Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const segmentLength = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      total += segmentLength;
+      minSegment = Math.min(minSegment, segmentLength);
       segments += 1;
     }
 
     const avg = total / Math.max(segments, 1);
     expect(avg).toBeGreaterThan(0.005);
     expect(avg).toBeLessThan(0.04);
+    expect(minSegment).toBeGreaterThan(1e-6);
   });
 });
 
@@ -234,5 +250,61 @@ describe('Export utilities', () => {
     expect(cloneColor.count).toBe(active);
     expect(clone.drawRange.count).toBe(active);
     clone.dispose();
+  });
+
+  it('builds OBJ mesh output with per-vertex colors and indexed faces', () => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute(
+      'position',
+      new BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+    );
+    geometry.setAttribute(
+      'color',
+      new BufferAttribute(new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]), 3),
+    );
+    geometry.setIndex([0, 1, 2]);
+
+    const obj = buildObjMeshWithVertexColors(geometry);
+    const vertexLines = obj.match(/^v /gm)?.length ?? 0;
+    const faceLines = obj.match(/^f /gm)?.length ?? 0;
+    expect(vertexLines).toBe(3);
+    expect(faceLines).toBe(1);
+    geometry.dispose();
+  });
+});
+
+describe('Trail mesh builder', () => {
+  it('closes start and end caps for a simple single-segment trail', () => {
+    const state: TrailStateView = {
+      trailPoints: new Float32Array([0, 0, 0, 1, 0, 0]),
+      headIndices: new Int32Array([1]),
+      filledLengths: new Int32Array([2]),
+      trailLength: 2,
+      emitterCount: 1,
+    };
+    const particles: ParticleSettings = {
+      trailLength: 2,
+      generationDistance: 0.05,
+      trailThickness: 2,
+    };
+    const material: MaterialSettings = {
+      gradientType: 'curvature',
+      gradientStart: '#ffffff',
+      gradientEnd: '#000000',
+      curvatureContrast: 1,
+      curvatureBias: 0,
+      gradientBlur: 0,
+      fresnel: 0.5,
+      specular: 0.4,
+      bloom: 0.7,
+    };
+
+    const geometry = buildTrailMeshGeometry(state, particles, material);
+    const position = geometry.getAttribute('position') as BufferAttribute;
+    const index = geometry.getIndex();
+
+    expect(position.count).toBe(16);
+    expect(index?.count ?? 0).toBe(36);
+    geometry.dispose();
   });
 });
