@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>260323_DiscreteVectors</title>
+    <style>
+      #ui-panel {
+        visibility: hidden;
+        opacity: 0;
+      }
+
+      html.ui-ready #ui-panel {
+        visibility: visible;
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui-panel" class="apple-panel">
+      <div id="ui-handle" class="panel-drag-handle">
+        <button
+          type="button"
+          id="collapse-toggle"
+          class="collapse-button panel-collapse-toggle"
+          aria-label="Collapse controls"
+          aria-expanded="true"
+        >
+          <span class="collapse-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="ui-body panel-sections">
+        <div class="control-hint">Wheel = Zoom, MMB = Pan, RMB = Orbit</div>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Simulation</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <div class="control control-grid-2">
+              <button type="button" id="start-sim" class="pill-button control-button-wide">Start</button>
+              <button type="button" id="reset-sim" class="pill-button control-button-wide">Reset</button>
+            </div>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Simulation Timeline</span>
+                <span id="simulation-timeline-value">0</span>
+              </div>
+              <input type="range" id="simulation-timeline" min="0" max="0" step="1" value="0" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Simulation Rate</span>
+                <span id="growth-speed-value">1.00</span>
+              </div>
+              <input type="range" id="growth-speed" min="0.1" max="3" step="0.01" value="1" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Emitter</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Count X</span>
+                <span id="emitter-count-x-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-x" min="1" max="18" step="1" value="6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count Y</span>
+                <span id="emitter-count-y-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-y" min="1" max="18" step="1" value="6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Count Z</span>
+                <span id="emitter-count-z-value">6</span>
+              </div>
+              <input type="range" id="emitter-count-z" min="1" max="18" step="1" value="6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Spacing X</span>
+                <span id="emitter-spacing-x-value">0.22</span>
+              </div>
+              <input type="range" id="emitter-spacing-x" min="0.05" max="1.5" step="0.01" value="0.22" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Spacing Y</span>
+                <span id="emitter-spacing-y-value">0.22</span>
+              </div>
+              <input type="range" id="emitter-spacing-y" min="0.05" max="1.5" step="0.01" value="0.22" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Spacing Z</span>
+                <span id="emitter-spacing-z-value">0.22</span>
+              </div>
+              <input type="range" id="emitter-spacing-z" min="0.05" max="1.5" step="0.01" value="0.22" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Particles</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Trail Length</span>
+                <span id="trail-length-value">120</span>
+              </div>
+              <input type="range" id="trail-length" min="8" max="320" step="1" value="120" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Generation Distance</span>
+                <span id="generation-distance-value">0.015</span>
+              </div>
+              <input type="range" id="generation-distance" min="0.002" max="0.1" step="0.001" value="0.015" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Growth</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control">
+              <div class="control-row">
+                <span>Noise Scale</span>
+                <span id="noise-scale-value">0.65</span>
+              </div>
+              <input type="range" id="noise-scale" min="0.05" max="4" step="0.01" value="0.65" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Noise Speed</span>
+                <span id="noise-speed-value">0.22</span>
+              </div>
+              <input type="range" id="noise-speed" min="0" max="2" step="0.01" value="0.22" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Noise Strength</span>
+                <span id="noise-strength-value">1.00</span>
+              </div>
+              <input type="range" id="noise-strength" min="0" max="3" step="0.01" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Vorticity</span>
+                <span id="vorticity-value">1.00</span>
+              </div>
+              <input type="range" id="vorticity" min="0" max="2" step="0.01" value="1" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Attraction</span>
+                <span id="attraction-value">0.25</span>
+              </div>
+              <input type="range" id="attraction" min="0" max="1.5" step="0.01" value="0.25" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Damping</span>
+                <span id="damping-value">0.985</span>
+              </div>
+              <input type="range" id="damping" min="0.85" max="0.999" step="0.001" value="0.985" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Material</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <label class="control select-control">
+              <div class="control-row">
+                <span>Gradient Type</span>
+              </div>
+              <span class="select-shell">
+                <select id="gradient-type">
+                  <option value="displacement" selected>Displacement</option>
+                  <option value="curvature">Curvature</option>
+                </select>
+              </span>
+            </label>
+
+            <div class="control control-grid-2">
+              <label class="control compact">
+                <div class="control-row">
+                  <span>Gradient Start</span>
+                </div>
+                <input type="color" id="gradient-start-color" class="color-picker" value="#9fd8ff" />
+              </label>
+              <label class="control compact">
+                <div class="control-row">
+                  <span>Gradient End</span>
+                </div>
+                <input type="color" id="gradient-end-color" class="color-picker" value="#ff0000" />
+              </label>
+            </div>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Gradient Contrast</span>
+                <span id="curvature-contrast-value">1.40</span>
+              </div>
+              <input type="range" id="curvature-contrast" min="0.2" max="3" step="0.01" value="1.4" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Gradient Bias</span>
+                <span id="curvature-bias-value">-0.40</span>
+              </div>
+              <input type="range" id="curvature-bias" min="-1" max="1" step="0.01" value="-0.4" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Gradient Blur</span>
+                <span id="gradient-blur-value">0.35</span>
+              </div>
+              <input type="range" id="gradient-blur" min="0" max="1" step="0.01" value="0.35" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Fresnel</span>
+                <span id="fresnel-value">0.05</span>
+              </div>
+              <input type="range" id="fresnel" min="0" max="2" step="0.01" value="0.05" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Specular</span>
+                <span id="specular-value">0.60</span>
+              </div>
+              <input type="range" id="specular" min="0" max="2" step="0.01" value="0.6" />
+            </label>
+
+            <label class="control">
+              <div class="control-row">
+                <span>Bloom</span>
+                <span id="bloom-value">0.05</span>
+              </div>
+              <input type="range" id="bloom" min="0" max="2" step="0.01" value="0.05" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="panel-section-header">
+            <span class="panel-section-label">Export</span>
+          </div>
+          <div class="panel-section-content panel-controls-stack">
+            <div class="control">
+              <button type="button" id="export-obj" class="pill-button control-button-wide">Export OBJ</button>
+            </div>
+            <div class="control">
+              <button type="button" id="export-glb" class="pill-button control-button-wide">Export GLB</button>
+            </div>
+            <div class="control">
+              <button type="button" id="export-screenshot" class="pill-button control-button-wide">Export Screenshot</button>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div id="ui-handle-bottom"></div>
+    </div>
+
+    <canvas id="app-canvas"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
